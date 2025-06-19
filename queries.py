@@ -116,23 +116,23 @@ class ReadTripsFromTripIdRow(TypedDict):
 def ReadTripsFromTripId(params: ReadTripsFromTripIdParams) -> ReadTripsFromTripIdRow:
     query = """
         SELECT
-            t.id
-            t.name
-            t.bus_id
-            t.route_id
-            t.start_time
-            t.end_time
-            t.driven_distance_km
-            t.energy_consumption_kwh
-            t.itcs_passengers_mean
-            t.itcs_passengers_min
-            t.itcs_passengers_max
-            t.grid_available_mean
-            t.amb_temperature_mean
-            t.amb_temperature_min
+            t.id,
+            t.name,
+            t.bus_id,
+            t.route_id,
+            t.start_time,
+            t.end_time,
+            t.driven_distance_km,
+            t.energy_consumption_kwh,
+            t.itcs_passengers_mean,
+            t.itcs_passengers_min,
+            t.itcs_passengers_max,
+            t.grid_available_mean,
+            t.amb_temperature_mean,
+            t.amb_temperature_min,
             t.amb_temperature_max
         FROM trips t
-        WHERE t.id = %(trip_id)s"
+        WHERE t.id = %(trip_id)s
     """
 
     conn = None
