@@ -1,0 +1,23 @@
+[project]
+name = "orca-ztbus-python-processor"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Predixus",email = "contact@predixus.com"}
+]
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "orca-python (>=0.2.0,<0.3.0)",
+    "psycopg2-binary (>=2.9.10,<3.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.group.dev.dependencies]
+types-psycopg2 = "^2.9.21.20250516"
+tqdm = "^4.67.1"
+
