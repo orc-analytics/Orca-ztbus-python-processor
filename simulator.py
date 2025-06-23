@@ -2,11 +2,7 @@ import datetime as dt
 import time
 from orca_python import EmitWindow, Window
 from queries import CreateSimlogEntryParams, CreateSimLogEntry, ReadLatestSimlog
-from typing import TypedDict
 import schedule
-
-
-EveryMinute = WindowType(name="EveryMinute", version="1.0.0", origin="simulator")
 
 def FindAndEmitMinuteWindow():
 
@@ -24,7 +20,12 @@ def FindAndEmitMinuteWindow():
         end_time = simLog.get("end_time") 
         start_time = end_time
         end_time = end_time + dt.timedelta(seconds=60)
-    
+        CreateSimLogEntry(CreateSimlogEntryParams(
+            start_time=start_time,
+            end_time=end_time
+        ))
+
+    print("Emitted window") 
     EmitWindow(Window(time_from=start_time, time_to=end_time, **EveryMinute))
 
 def Simulate():

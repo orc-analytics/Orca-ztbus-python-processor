@@ -211,7 +211,11 @@ def ReadLatestSimlog() -> ReadSimlogRow:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(query)
             results = cur.fetchall()
-            return [ReadSimlogRow(**row) for row in results][0]
+            res = [ReadSimlogRow(**row) for row in results]
+            if len(res) >0:
+                return res[0]
+            else:
+                return res
     finally:
         if conn:
             ReturnConnection(conn)
