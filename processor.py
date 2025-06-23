@@ -1,10 +1,13 @@
 from orca_python import Processor
+from windows import EveryMinute
 import time
+from windows import AppliedBreaks, EveryMinute
 
-proc = Processor("ml")
+proc = Processor("ztbus_analyser")
 
-
-@proc.algorithm("MyAlgo", "1.0.0", "Every30Second", "1.0.0")
-def my_algorithm() -> dict:
-    time.sleep(5)
-    return {"result": 42}
+@proc.algorithm("FindBreakWindows", "1.0.0", EveryMinute)
+def find_when_breaking_windows(*args, **kwargs) -> None:
+    print("KWARGS")
+    print(kwargs)
+    print("ARGS")
+    print(args)

@@ -8,11 +8,11 @@ authors = [
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "orca-python >=0.3.0",
-    "psycopg2-binary (>=2.9.10,<3.0.0)",
-    "schedule (>=1.2.2,<2.0.0)"
+    "psycopg2-binary[pool] (>=2.9.10,<3.0.0)",
+    "schedule (>=1.2.2,<2.0.0)",
+    "orca-python >=0.5.0"
 ]
-
+package-mode = false
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

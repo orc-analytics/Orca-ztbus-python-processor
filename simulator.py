@@ -1,7 +1,7 @@
 import datetime as dt
 import time
 from orca_python import EmitWindow, Window
-from queries import CreateSimlogEntryParams, CreateSimLogEntry, ReadLatestSimlog
+from queries import CreateSimlogEntryParams, CreateSimLogEntry, ReadLatestSimlog, CreateSimLogsTable
 from windows import EveryMinute
 import schedule
 
@@ -24,11 +24,17 @@ def FindAndEmitMinuteWindow():
             CreateSimlogEntryParams(start_time=start_time, end_time=end_time)
         )
     print("Emitted window")
-    EmitWindow(Window(time_from=start_time, time_to=end_time, **EveryMinute))
+    EmitWindow(Window(time_from=int(start_time.timestamp()), time_to=int(end_time.timestamp()), name=EveryMinute.name, version=EveryMinute.version, origin="simulator"))
 
 
 def Simulate():
-    schedule.every(1).minute.do(FindAndEmitMinuteWindow)
+    schedule.every(1).second.do(FindAndEmitMinuteWindow)
     while True:
         schedule.run_pending()
         time.sleep(1)
+
+if __name__=="__main__":
+    CreateSimLogsTable()
+    Simulate()
+
+

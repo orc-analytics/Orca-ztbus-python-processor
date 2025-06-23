@@ -1,13 +1,8 @@
-from queries import (
-    CreateSimLogsTable,
-)
-from simulator import Simulate
-
+from processor import proc
 
 def main():
-    CreateSimLogsTable()
-    Simulate()
-
+    proc.Register()
+    proc.Start()
 
 if __name__ == "__main__":
     main()
