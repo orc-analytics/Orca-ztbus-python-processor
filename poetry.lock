@@ -145,14 +145,14 @@ setuptools = "*"
 
 [[package]]
 name = "orca-python"
-version = "0.2.0"
+version = "0.3.0"
 description = "Python SDK for the Predixus Orca product"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "orca_python-0.2.0-py3-none-any.whl", hash = "sha256:3141ba067fa49c51cd7468a93b596852f7e99c2b295110e14af6f8e8de50783c"},
-    {file = "orca_python-0.2.0.tar.gz", hash = "sha256:d6672c9f3511a810e11e8a2471d3d17115b32113ec5508654a5bb7a1cd927145"},
+    {file = "orca_python-0.3.0-py3-none-any.whl", hash = "sha256:6a0ed8e6417298ace2fb9a6876590ae388ab755e829d36b7da4f3a97a74b97d8"},
+    {file = "orca_python-0.3.0.tar.gz", hash = "sha256:9ddc9e5a630882c9b6ca77b0f90622cd665f0357c204fb88f1b87c2d6eb5af47"},
 ]
 
 [package.dependencies]
@@ -257,6 +257,21 @@ files = [
 ]
 
 [[package]]
+name = "schedule"
+version = "1.2.2"
+description = "Job scheduling for humans."
+optional = false
+python-versions = ">=3.7"
+groups = ["main"]
+files = [
+    {file = "schedule-1.2.2-py3-none-any.whl", hash = "sha256:5bef4a2a0183abf44046ae0d164cadcac21b1db011bdd8102e4a0c1e91e06a7d"},
+    {file = "schedule-1.2.2.tar.gz", hash = "sha256:15fe9c75fe5fd9b9627f3f19cc0ef1420508f9f9a46f45cd0769ef75ede5f0b7"},
+]
+
+[package.extras]
+timezone = ["pytz"]
+
+[[package]]
 name = "setuptools"
 version = "80.9.0"
 description = "Easily download, build, install, upgrade, and uninstall Python packages"
@@ -314,4 +329,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.13"
-content-hash = "eb9ee01b69d6dd6969266f51f93262d5c5844116d1122ef3e76a1adcf415525d"
+content-hash = "ebd49a935c0bc47f41348e42a35b14df4f8944a2211cd40432b0f6f8612bafca"

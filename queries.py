@@ -132,7 +132,7 @@ def ReadTripsFromTripId(params: ReadTripsFromTripIdParams) -> ReadTripsFromTripI
             t.amb_temperature_min,
             t.amb_temperature_max
         FROM trips t
-        WHERE t.id = %(trip_id)s
+        WHERE t.id = %(trip_id)s LIMIT 1;
     """
 
     conn = None
@@ -141,7 +141,77 @@ def ReadTripsFromTripId(params: ReadTripsFromTripIdParams) -> ReadTripsFromTripI
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(query, params)
             results = cur.fetchall()
-            return [ReadTelemResultRow(**row) for row in results]
+            return [ReadTelemResultRow(**row) for row in results][0]
+    finally:
+        if conn:
+            ReturnConnection(conn)
+
+def CreateSimLogsTable() -> None:
+    query = """
+        CREATE TABLE IF NOT EXISTS sim_logs (
+            id SERIAL PRIMARY KEY,
+            start_time TIMESTAMP NOT NULL,
+            end_time TIMESTAMP NOT NULL
+        );
+    """
+
+    conn = None
+    try:
+        conn = GetConnection()
+        with conn.cursor() as cur:
+            cur.execute(query)
+            conn.commit()
+    except Exception as e:
+        raise Exception(f"Could not create simlogs table: {e}")
+    finally:
+        if conn:
+            ReturnConnection(conn)
+
+class CreateSimlogEntryParams(TypedDict):
+    start_time: dt.datetime
+    end_time: dt.datetime
+
+
+def CreateSimLogEntry(params: CreateSimlogEntryParams) -> None:
+    QUERY = """INSERT INTO sim_logs (start_time,end_time) VALUES (%(start_time)s, %(end_time)s)"""
+
+    conn = None
+
+    try:
+        conn = GetConnection()
+        # with conn.cursor(name='simlogs_insert_cursor', cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        with conn.cursor() as cur:
+            cur.execute(QUERY, params)
+            conn.commit()
+    except Exception as e:
+        raise Exception(f"could not insert simlog: {e}")
+    finally:
+        if conn:
+            ReturnConnection(conn)
+
+class ReadSimlogRow(TypedDict):
+    id: int
+    start_time: dt.datetime
+    end_time: dt.datetime
+
+def ReadLatestSimlog() -> ReadSimlogRow:
+    query = """
+        SELECT
+            s.id,
+            s.start_time, 
+            s.end_time
+        FROM sim_logs s
+        ORDER BY s.end_time
+        DESC LIMIT 1;
+    """
+
+    conn = None
+    try:
+        conn = GetConnection()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(query)
+            results = cur.fetchall()
+            return [ReadSimlogRow(**row) for row in results][0]
     finally:
         if conn:
             ReturnConnection(conn)
