@@ -1,6 +1,5 @@
 # db.py
 import psycopg2
-from psycopg2 import pool
 import os
 
 POSTGRES_CONFIG = {
@@ -11,18 +10,16 @@ POSTGRES_CONFIG = {
     "port": os.environ.get("PG_PORT"),
 }
 
-_pool = psycopg2.pool.SimpleConnectionPool(
-    minconn=1,
-    maxconn=10,
-    **POSTGRES_CONFIG
-)
+_pool = psycopg2.pool.SimpleConnectionPool(minconn=1, maxconn=10, **POSTGRES_CONFIG)
+
 
 def GetConnection():
     return _pool.getconn()
 
+
 def ReturnConnection(conn):
     _pool.putconn(conn)
 
+
 def ClosePool():
     _pool.closeall()
-

@@ -1,5 +1,5 @@
 import datetime as dt
-from typing import TypedDict, Optional, List, Generator
+from typing import TypedDict, Optional, Generator
 from db import GetConnection, ReturnConnection
 import psycopg2.extras
 
@@ -40,7 +40,9 @@ class ReadTelemResultRow(TypedDict):
     status_park_brake_is_active: bool
 
 
-def ReadTelemetryForTripAndTime(params: ReadTelemParams) -> Generator[ReadTelemResultRow, None, None]:
+def ReadTelemetryForTripAndTime(
+    params: ReadTelemParams,
+) -> Generator[ReadTelemResultRow, None, None]:
     BASE_QUERY = """
         SELECT
             id,
@@ -85,7 +87,9 @@ def ReadTelemetryForTripAndTime(params: ReadTelemParams) -> Generator[ReadTelemR
 
     try:
         conn = GetConnection()
-        with conn.cursor(name='telem_cursor', cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        with conn.cursor(
+            name="telem_cursor", cursor_factory=psycopg2.extras.RealDictCursor
+        ) as cur:
             cur.execute(BASE_QUERY, params)
             for row in cur:
                 yield ReadTelemResultRow(**row)
@@ -93,8 +97,10 @@ def ReadTelemetryForTripAndTime(params: ReadTelemParams) -> Generator[ReadTelemR
         if conn:
             ReturnConnection(conn)
 
+
 class ReadTripsFromTripIdParams(TypedDict):
     trip_id: int
+
 
 class ReadTripsFromTripIdRow(TypedDict):
     id: int
@@ -111,7 +117,8 @@ class ReadTripsFromTripIdRow(TypedDict):
     grid_available_mean: float
     amb_temperature_mean: float
     amb_temperature_min: float
-    amb_temperature_max: float 
+    amb_temperature_max: float
+
 
 def ReadTripsFromTripId(params: ReadTripsFromTripIdParams) -> ReadTripsFromTripIdRow:
     query = """
@@ -146,6 +153,7 @@ def ReadTripsFromTripId(params: ReadTripsFromTripIdParams) -> ReadTripsFromTripI
         if conn:
             ReturnConnection(conn)
 
+
 def CreateSimLogsTable() -> None:
     query = """
         CREATE TABLE IF NOT EXISTS sim_logs (
@@ -166,6 +174,7 @@ def CreateSimLogsTable() -> None:
     finally:
         if conn:
             ReturnConnection(conn)
+
 
 class CreateSimlogEntryParams(TypedDict):
     start_time: dt.datetime
@@ -189,10 +198,12 @@ def CreateSimLogEntry(params: CreateSimlogEntryParams) -> None:
         if conn:
             ReturnConnection(conn)
 
+
 class ReadSimlogRow(TypedDict):
     id: int
     start_time: dt.datetime
     end_time: dt.datetime
+
 
 def ReadLatestSimlog() -> ReadSimlogRow:
     query = """
@@ -212,7 +223,7 @@ def ReadLatestSimlog() -> ReadSimlogRow:
             cur.execute(query)
             results = cur.fetchall()
             res = [ReadSimlogRow(**row) for row in results]
-            if len(res) >0:
+            if len(res) > 0:
                 return res[0]
             else:
                 return res
