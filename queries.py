@@ -5,10 +5,9 @@ import psycopg2.extras
 
 
 class ReadTelemParams(TypedDict):
-    trip_id: int
+    trip_id: Optional[int]
     time_from: Optional[dt.datetime]
     time_to: Optional[dt.datetime]
-
 
 class ReadTelemResultRow(TypedDict):
     id: int
@@ -43,6 +42,11 @@ class ReadTelemResultRow(TypedDict):
 def ReadTelemetryForTripAndTime(
     params: ReadTelemParams,
 ) -> Generator[ReadTelemResultRow, None, None]:
+
+    # validate that at least one parameter is provided
+    if not any([params.get("trip_id"), params.get("time_from"), params.get("time_to")]):
+        raise ValueError("at least one of trip_id, time_from, or time_to must be provided")
+    
     BASE_QUERY = """
         SELECT
             id,
@@ -73,9 +77,14 @@ def ReadTelemetryForTripAndTime(
             status_halt_brake_is_active,
             status_park_brake_is_active
         FROM telemetry
-        WHERE trip_id = %(trip_id)s
+        WHERE 1=1
     """
 
+    # add trip_id condition if provided
+    if params.get("trip_id"):
+        BASE_QUERY += " AND trip_id = %(trip_id)s"
+
+    # add time conditions
     if params.get("time_from") and params.get("time_to"):
         BASE_QUERY += " AND time BETWEEN %(time_from)s AND %(time_to)s"
     elif params.get("time_from"):
@@ -96,7 +105,6 @@ def ReadTelemetryForTripAndTime(
     finally:
         if conn:
             ReturnConnection(conn)
-
 
 class ReadTripsFromTripIdParams(TypedDict):
     trip_id: int

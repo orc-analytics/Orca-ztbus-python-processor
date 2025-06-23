@@ -28,7 +28,7 @@ def FindAndEmitMinuteWindow():
 
 
 def Simulate():
-    schedule.every(1).second.do(FindAndEmitMinuteWindow)
+    schedule.every(1).minute.do(FindAndEmitMinuteWindow)
     while True:
         schedule.run_pending()
         time.sleep(1)
