@@ -4,7 +4,6 @@ import datetime as dt
 from queries import ReadTelemetryForTripAndTime, ReadTelemParams
 from orca_python.main import pb
 import pandas as pd
-from typing import Dict, List
 
 proc = Processor("ztbus_analyser")
 
@@ -39,6 +38,9 @@ def _find_contiguous_chunks_and_emit(
                     )
                 )
             )
+
+            if _telem_lookback.empty:  # then no more data
+                break
             _telem_lookback.sort_values("time", ascending=True)
             _telem_lookback.reset_index(inplace=True, drop=True)
 
@@ -63,7 +65,6 @@ def _find_contiguous_chunks_and_emit(
     # find chunks where the brake is applied - via finite automota
     in_window = False
     start_idx = 0
-    windows: List[Dict[str, int]] = []
     for ii, row in df.iterrows():
         if row[tgt_column] and not in_window:
             in_window = True
@@ -83,7 +84,6 @@ def _find_contiguous_chunks_and_emit(
                     metadata={"trip_id": trip_id},
                 )
             )
-            windows.append({"start_idx": start_idx, "end_idx": ii - 1})
 
 
 @proc.algorithm("FindHaltBrakeWindows", "1.0.0", EveryMinute)
@@ -138,8 +138,21 @@ def find_when_applying_park_brake(params: ExecutionParams) -> None:
         )
 
 
+@proc.algorithm("StubParkBrake", "1.0.0", ParkBrakeApplied)
+def stub_park_break_algo(params: ExecutionParams) -> None:
+    print("STUB PARK BRAKE")
+    ...
+
+
+@proc.algorithm("StubHaltBrake", "1.0.0", HaltBrakeApplied)
+def stub_halt_brake_algo(params: ExecutionParams) -> None:
+    print("STUB HALT BRAKE")
+    ...
+
+
 if __name__ == "__main__":
     proc.Register()
+
     start_time = dt.datetime(2021, 3, 9, 14, 15)
     end_time = start_time + dt.timedelta(seconds=60)
     window = pb.Window(
@@ -151,4 +164,4 @@ if __name__ == "__main__":
     )
     params = ExecutionParams(window=window)
     find_when_applying_park_brake(params=params)
-    find_when_applying_halt_brake(oarams=params)
+    find_when_applying_halt_brake(params=params)
