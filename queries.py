@@ -9,6 +9,7 @@ class ReadTelemParams(TypedDict):
     time_from: Optional[dt.datetime]
     time_to: Optional[dt.datetime]
 
+
 class ReadTelemResultRow(TypedDict):
     id: int
     trip_id: int
@@ -42,11 +43,12 @@ class ReadTelemResultRow(TypedDict):
 def ReadTelemetryForTripAndTime(
     params: ReadTelemParams,
 ) -> Generator[ReadTelemResultRow, None, None]:
-
     # validate that at least one parameter is provided
     if not any([params.get("trip_id"), params.get("time_from"), params.get("time_to")]):
-        raise ValueError("at least one of trip_id, time_from, or time_to must be provided")
-    
+        raise ValueError(
+            "at least one of trip_id, time_from, or time_to must be provided"
+        )
+
     BASE_QUERY = """
         SELECT
             id,
@@ -105,6 +107,7 @@ def ReadTelemetryForTripAndTime(
     finally:
         if conn:
             ReturnConnection(conn)
+
 
 class ReadTripsFromTripIdParams(TypedDict):
     trip_id: int
