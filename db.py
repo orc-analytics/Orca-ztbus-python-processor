@@ -12,7 +12,7 @@ POSTGRES_CONFIG = {
 _pool = pool.SimpleConnectionPool(minconn=1, maxconn=10, **POSTGRES_CONFIG)
 
 
-def GetConnection() :
+def GetConnection():
     return _pool.getconn()
 
 

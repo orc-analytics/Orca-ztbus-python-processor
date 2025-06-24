@@ -1,5 +1,5 @@
 import datetime as dt
-from typing import TypedDict, Optional, Generator
+from typing import TypedDict, Optional
 from db import GetConnection, ReturnConnection
 import psycopg2.extras
 import functools
@@ -63,7 +63,7 @@ class ReadTelemResultRow(TypedDict):
 @functools.lru_cache
 def ReadTelemetryForTripAndTime(
     params: ReadTelemParams,
-) -> Generator[ReadTelemResultRow, None, None]:
+) -> ReadTelemResultRow:
     # validate that at least one parameter is provided
     if not any([params.get("trip_id"), params.get("time_from"), params.get("time_to")]):
         raise ValueError(
@@ -123,8 +123,7 @@ def ReadTelemetryForTripAndTime(
             name="telem_cursor", cursor_factory=psycopg2.extras.RealDictCursor
         ) as cur:
             cur.execute(BASE_QUERY, params)
-            for row in cur:
-                yield ReadTelemResultRow(**row)
+            return [ReadTelemResultRow(**row) for row in cur]
     finally:
         if conn:
             ReturnConnection(conn)

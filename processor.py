@@ -62,7 +62,7 @@ def _find_contiguous_chunks_and_emit(
     # strip out leading false elements
     df = df[df["status_halt_brake_is_active"].idxmax() :].reset_index(drop=True)
 
-    # find chunks where the brake is applied - via finite automota
+    # find chunks where the brake is applied - via finite automata
     in_window = False
     start_idx = 0
     for ii, row in df.iterrows():
@@ -97,6 +97,8 @@ def find_when_applying_halt_brake(params: ExecutionParams) -> None:
         )
     )
     df = pd.DataFrame(telem)
+    if df.empty:
+        return
     for trip_id, trip_df in df.groupby("trip_id"):
         trip_df.sort_values("time", ascending=True, inplace=True)
         trip_df.reset_index(inplace=True, drop=True)
@@ -123,6 +125,8 @@ def find_when_applying_park_brake(params: ExecutionParams) -> None:
         )
     )
     df = pd.DataFrame(telem)
+    if df.empty:
+        return
     for trip_id, trip_df in df.groupby("trip_id"):
         trip_df.sort_values("time", ascending=True, inplace=True)
         trip_df.reset_index(inplace=True, drop=True)
