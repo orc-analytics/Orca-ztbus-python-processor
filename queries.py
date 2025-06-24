@@ -2,6 +2,7 @@ import datetime as dt
 from typing import TypedDict, Optional, Generator
 from db import GetConnection, ReturnConnection
 import psycopg2.extras
+import functools
 
 
 class ReadTelemParams(TypedDict):
@@ -40,6 +41,7 @@ class ReadTelemResultRow(TypedDict):
     status_park_brake_is_active: bool
 
 
+@functools.lru_cache
 def ReadTelemetryForTripAndTime(
     params: ReadTelemParams,
 ) -> Generator[ReadTelemResultRow, None, None]:
