@@ -3,6 +3,24 @@ from typing import TypedDict, Optional, Generator
 from db import GetConnection, ReturnConnection
 import psycopg2.extras
 import functools
+from frozendict import frozendict
+
+
+def freezeargs(func):
+    """
+    Convert a mutable dictionary into immutable.
+    Useful to be compatible with cache
+    """
+
+    @functools.wraps(func)
+    def wrapped(*args, **kwargs):
+        args = (frozendict(arg) if isinstance(arg, dict) else arg for arg in args)
+        kwargs = {
+            k: frozendict(v) if isinstance(v, dict) else v for k, v in kwargs.items()
+        }
+        return func(*args, **kwargs)
+
+    return wrapped
 
 
 class ReadTelemParams(TypedDict):
@@ -41,6 +59,7 @@ class ReadTelemResultRow(TypedDict):
     status_park_brake_is_active: bool
 
 
+@freezeargs
 @functools.lru_cache
 def ReadTelemetryForTripAndTime(
     params: ReadTelemParams,
