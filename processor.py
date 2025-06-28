@@ -1,8 +1,15 @@
-from orca_python import Processor, ExecutionParams, EmitWindow, Window, WindowType
+from orca_python import (
+    Processor,
+    ExecutionParams,
+    EmitWindow,
+    Window,
+    WindowType,
+    StructResult,
+    NoneResult,
+)
 from windows import EveryMinute, HaltBrakeApplied, ParkBrakeApplied
 import datetime as dt
 from queries import ReadTelemetryForTripAndTime, ReadTelemParams
-from typing import Dict
 import pandas as pd
 
 proc = Processor("ztbus_analyser")
@@ -45,26 +52,29 @@ def _find_contiguous_chunks_and_emit(
             _telem_lookback.reset_index(inplace=True, drop=True)
 
             # if all true, then have not looked back far enough
-            if _telem_lookback["status_halt_brake_is_active"].all():
+            if _telem_lookback[tgt_column].all():
                 df = pd.concat([_telem_lookback, df])
                 df.reset_index(inplace=True, drop=True)
                 continue
             else:
                 # ground previous groups as they would have already been captured
+                _idxMin = _telem_lookback[tgt_column][::-1].idxmin()
                 _telem_lookback.loc[
-                    : _telem_lookback["status_halt_brake_is_active"][::-1].idxmin(),
-                    "status_halt_brake_is_active",
+                    :int(_idxMin),
+                    tgt_column,
                 ] = False
                 df = pd.concat([_telem_lookback, df])
                 df.reset_index(inplace=True, drop=True)
                 break
 
     # strip out leading false elements
-    df = df[df["status_halt_brake_is_active"].idxmax() :].reset_index(drop=True)
+    _idxMax = df[tgt_column].idxmax()
+    df = df[int(_idxMax):].reset_index(drop=True)
 
     # find chunks where the brake is applied - via finite automata
     in_window = False
     start_idx = 0
+    windows_emitted = 0
     for ii, row in df.iterrows():
         if row[tgt_column] and not in_window:
             in_window = True
@@ -72,6 +82,7 @@ def _find_contiguous_chunks_and_emit(
             continue
         if not row[tgt_column] and in_window:
             in_window = False
+            windows_emitted += 1
 
             # emit the window
             EmitWindow(
@@ -84,10 +95,11 @@ def _find_contiguous_chunks_and_emit(
                     metadata={"trip_id": trip_id},
                 )
             )
+    return windows_emitted
 
 
 @proc.algorithm("FindHaltBrakeWindows", "1.0.0", EveryMinute)
-def find_when_applying_halt_brake(params: ExecutionParams) -> None:
+def find_when_applying_halt_brake(params: ExecutionParams) -> NoneResult:
     # get telemetry for this window
     telem = ReadTelemetryForTripAndTime(
         ReadTelemParams(
@@ -98,7 +110,7 @@ def find_when_applying_halt_brake(params: ExecutionParams) -> None:
     )
     df = pd.DataFrame(telem)
     if df.empty:
-        return
+        return NoneResult()
     for trip_id, trip_df in df.groupby("trip_id"):
         trip_df.sort_values("time", ascending=True, inplace=True)
         trip_df.reset_index(inplace=True, drop=True)
@@ -113,9 +125,11 @@ def find_when_applying_halt_brake(params: ExecutionParams) -> None:
             origin="halt_brake_emitter",
         )
 
+    return NoneResult()
+
 
 @proc.algorithm("FindParkBrakeWindows", "1.0.0", EveryMinute)
-def find_when_applying_park_brake(params: ExecutionParams) -> None:
+def find_when_applying_park_brake(params: ExecutionParams) -> NoneResult:
     # get telemetry for this window
     telem = ReadTelemetryForTripAndTime(
         ReadTelemParams(
@@ -126,7 +140,7 @@ def find_when_applying_park_brake(params: ExecutionParams) -> None:
     )
     df = pd.DataFrame(telem)
     if df.empty:
-        return
+        return NoneResult()
     for trip_id, trip_df in df.groupby("trip_id"):
         trip_df.sort_values("time", ascending=True, inplace=True)
         trip_df.reset_index(inplace=True, drop=True)
@@ -140,11 +154,12 @@ def find_when_applying_park_brake(params: ExecutionParams) -> None:
             emitting_window=ParkBrakeApplied,
             origin="halt_brake_emitter",
         )
+    return NoneResult()
 
 
 # algorithms
 @proc.algorithm("HaltBrakeAmbientTemperature", "1.0.0", HaltBrakeApplied)
-def halt_brake_ambient_temperature(params: ExecutionParams) -> Dict[str, float | None]:
+def halt_brake_ambient_temperature(params: ExecutionParams) -> StructResult:
     trip_id = params.window.metadata["trip_id"]
     if trip_id is None:
         raise Exception("Require trip_id as metadata to the window")
@@ -158,13 +173,15 @@ def halt_brake_ambient_temperature(params: ExecutionParams) -> Dict[str, float |
     )
     df = pd.DataFrame(telem)
     median = df["temperature_ambient"].median()
-    return {
-        "50p": median,
-    }
+    return StructResult(
+        {
+            "50p": median,
+        }
+    )
 
 
 @proc.algorithm("ParkBrakeAmbientTemperature", "1.0.0", ParkBrakeApplied)
-def park_brake_ambient_temperature(params: ExecutionParams) -> Dict[str, float | None]:
+def park_brake_ambient_temperature(params: ExecutionParams) -> StructResult:
     trip_id = params.window.metadata["trip_id"]
     if trip_id is None:
         raise Exception("Require trip_id as metadata to the window")
@@ -178,12 +195,14 @@ def park_brake_ambient_temperature(params: ExecutionParams) -> Dict[str, float |
     )
     df = pd.DataFrame(telem)
     median = df["temperature_ambient"].median()
-    return {
-        "50p": median,
-    }
+    return StructResult(
+        {
+            "50p": median,
+        }
+    )
 
 
-def _helper(column: str, params: ExecutionParams) -> Dict[str, float | None]:
+def _helper(column: str, params: ExecutionParams) -> StructResult:
     trip_id = params.window.metadata["trip_id"]
     if trip_id is None:
         raise Exception("Require trip_id as metadata to the window")
@@ -197,231 +216,235 @@ def _helper(column: str, params: ExecutionParams) -> Dict[str, float | None]:
     )
     df = pd.DataFrame(telem)
     if df.empty:
-        return {
-            "mean": None,
-            "std": None,
-            "min": None,
-            "25p": None,
-            "50p": None,
-            "75p": None,
-            "max": None,
-        }
+        return StructResult(
+            {
+                "mean": None,
+                "std": None,
+                "min": None,
+                "25p": None,
+                "50p": None,
+                "75p": None,
+                "max": None,
+            }
+        )
 
     stats = df[column].describe()
-    return {
-        "mean": stats["mean"],
-        "std": stats["std"],
-        "min": stats["min"],
-        "25p": stats["25%"],
-        "50p": stats["50%"],
-        "75p": stats["75%"],
-        "max": stats["max"],
-    }
+    return StructResult(
+        {
+            "mean": stats["mean"],
+            "std": stats["std"],
+            "min": stats["min"],
+            "25p": stats["25%"],
+            "50p": stats["50%"],
+            "75p": stats["75%"],
+            "max": stats["max"],
+        }
+    )
 
 
 @proc.algorithm("ElectricPowerDemandHaltBrakeStats", "1.0.0", HaltBrakeApplied)
 def electric_power_demand_halt_brake_stats(
     params: ExecutionParams,
-) -> Dict[str, float | None]:
+) -> StructResult:
     return _helper("electric_power_demand", params)
 
 
 @proc.algorithm("TractionBrakePressureHaltBrakeStats", "1.0.0", HaltBrakeApplied)
 def traction_brake_pressure_halt_brake_stats(
     params: ExecutionParams,
-) -> Dict[str, float | None]:
+) -> StructResult:
     return _helper("traction_brake_pressure", params)
 
 
 @proc.algorithm("TractionTractionForceHaltBrakeStats", "1.0.0", HaltBrakeApplied)
 def traction_traction_force_halt_brake_stats(
     params: ExecutionParams,
-) -> Dict[str, float | None]:
+) -> StructResult:
     return _helper("traction_traction_force", params)
 
 
 @proc.algorithm("GnssAltitudeHaltBrakeStats", "1.0.0", HaltBrakeApplied)
-def gnss_altitude_halt_brake_stats(params: ExecutionParams) -> Dict[str, float | None]:
+def gnss_altitude_halt_brake_stats(params: ExecutionParams) -> StructResult:
     return _helper("gnss_altitude", params)
 
 
 @proc.algorithm("GnssCourseHaltBrakeStats", "1.0.0", HaltBrakeApplied)
-def gnss_course_halt_brake_stats(params: ExecutionParams) -> Dict[str, float | None]:
+def gnss_course_halt_brake_stats(params: ExecutionParams) -> StructResult:
     return _helper("gnss_course", params)
 
 
 @proc.algorithm("GnssLatitudeHaltBrakeStats", "1.0.0", HaltBrakeApplied)
-def gnss_latitude_halt_brake_stats(params: ExecutionParams) -> Dict[str, float | None]:
+def gnss_latitude_halt_brake_stats(params: ExecutionParams) -> StructResult:
     return _helper("gnss_latitude", params)
 
 
 @proc.algorithm("GnssLongitudeHaltBrakeStats", "1.0.0", HaltBrakeApplied)
-def gnss_longitude_halt_brake_stats(params: ExecutionParams) -> Dict[str, float | None]:
+def gnss_longitude_halt_brake_stats(params: ExecutionParams) -> StructResult:
     return _helper("gnss_longitude", params)
 
 
 @proc.algorithm("OdometryArticulationAngleHaltBrakeStats", "1.0.0", HaltBrakeApplied)
 def odometry_articulation_angle_halt_brake_stats(
     params: ExecutionParams,
-) -> Dict[str, float | None]:
+) -> StructResult:
     return _helper("odometry_articulation_angle", params)
 
 
 @proc.algorithm("OdometrySteeringAngleHaltBrakeStats", "1.0.0", HaltBrakeApplied)
 def odometry_steering_angle_halt_brake_stats(
     params: ExecutionParams,
-) -> Dict[str, float | None]:
+) -> StructResult:
     return _helper("odometry_steering_angle", params)
 
 
 @proc.algorithm("OdometryVehicleSpeedHaltBrakeStats", "1.0.0", HaltBrakeApplied)
 def odometry_vehicle_speed_halt_brake_stats(
     params: ExecutionParams,
-) -> Dict[str, float | None]:
+) -> StructResult:
     return _helper("odometry_vehicle_speed", params)
 
 
 @proc.algorithm("OdometryWheelSpeedFlHaltBrakeStats", "1.0.0", HaltBrakeApplied)
 def odometry_wheel_speed_fl_halt_brake_stats(
     params: ExecutionParams,
-) -> Dict[str, float | None]:
+) -> StructResult:
     return _helper("odometry_wheel_speed_fl", params)
 
 
 @proc.algorithm("OdometryWheelSpeedFrHaltBrakeStats", "1.0.0", HaltBrakeApplied)
 def odometry_wheel_speed_fr_halt_brake_stats(
     params: ExecutionParams,
-) -> Dict[str, float | None]:
+) -> StructResult:
     return _helper("odometry_wheel_speed_fr", params)
 
 
 @proc.algorithm("OdometryWheelSpeedMlHaltBrakeStats", "1.0.0", HaltBrakeApplied)
 def odometry_wheel_speed_ml_halt_brake_stats(
     params: ExecutionParams,
-) -> Dict[str, float | None]:
+) -> StructResult:
     return _helper("odometry_wheel_speed_ml", params)
 
 
 @proc.algorithm("OdometryWheelSpeedMrHaltBrakeStats", "1.0.0", HaltBrakeApplied)
 def odometry_wheel_speed_mr_halt_brake_stats(
     params: ExecutionParams,
-) -> Dict[str, float | None]:
+) -> StructResult:
     return _helper("odometry_wheel_speed_mr", params)
 
 
 @proc.algorithm("OdometryWheelSpeedRlHaltBrakeStats", "1.0.0", HaltBrakeApplied)
 def odometry_wheel_speed_rl_halt_brake_stats(
     params: ExecutionParams,
-) -> Dict[str, float | None]:
+) -> StructResult:
     return _helper("odometry_wheel_speed_rl", params)
 
 
 @proc.algorithm("OdometryWheelSpeedRrHaltBrakeStats", "1.0.0", HaltBrakeApplied)
 def odometry_wheel_speed_rr_halt_brake_stats(
     params: ExecutionParams,
-) -> Dict[str, float | None]:
+) -> StructResult:
     return _helper("odometry_wheel_speed_rr", params)
 
 
 @proc.algorithm("ElectricPowerDemandParkBrakeStats", "1.0.0", ParkBrakeApplied)
 def electric_power_demand_park_brake_stats(
     params: ExecutionParams,
-) -> Dict[str, float | None]:
+) -> StructResult:
     return _helper("electric_power_demand", params)
 
 
 @proc.algorithm("TractionBrakePressureParkBrakeStats", "1.0.0", ParkBrakeApplied)
 def traction_brake_pressure_park_brake_stats(
     params: ExecutionParams,
-) -> Dict[str, float | None]:
+) -> StructResult:
     return _helper("traction_brake_pressure", params)
 
 
 @proc.algorithm("TractionTractionForceParkBrakeStats", "1.0.0", ParkBrakeApplied)
 def traction_traction_force_park_brake_stats(
     params: ExecutionParams,
-) -> Dict[str, float | None]:
+) -> StructResult:
     return _helper("traction_traction_force", params)
 
 
 @proc.algorithm("GnssAltitudeParkBrakeStats", "1.0.0", ParkBrakeApplied)
-def gnss_altitude_park_brake_stats(params: ExecutionParams) -> Dict[str, float | None]:
+def gnss_altitude_park_brake_stats(params: ExecutionParams) -> StructResult:
     return _helper("gnss_altitude", params)
 
 
 @proc.algorithm("GnssCourseParkBrakeStats", "1.0.0", ParkBrakeApplied)
-def gnss_course_park_brake_stats(params: ExecutionParams) -> Dict[str, float | None]:
+def gnss_course_park_brake_stats(params: ExecutionParams) -> StructResult:
     return _helper("gnss_course", params)
 
 
 @proc.algorithm("GnssLatitudeParkBrakeStats", "1.0.0", ParkBrakeApplied)
-def gnss_latitude_park_brake_stats(params: ExecutionParams) -> Dict[str, float | None]:
+def gnss_latitude_park_brake_stats(params: ExecutionParams) -> StructResult:
     return _helper("gnss_latitude", params)
 
 
 @proc.algorithm("GnssLongitudeParkBrakeStats", "1.0.0", ParkBrakeApplied)
-def gnss_longitude_park_brake_stats(params: ExecutionParams) -> Dict[str, float | None]:
+def gnss_longitude_park_brake_stats(params: ExecutionParams) -> StructResult:
     return _helper("gnss_longitude", params)
 
 
 @proc.algorithm("OdometryArticulationAngleParkBrakeStats", "1.0.0", ParkBrakeApplied)
 def odometry_articulation_angle_park_brake_stats(
     params: ExecutionParams,
-) -> Dict[str, float | None]:
+) -> StructResult:
     return _helper("odometry_articulation_angle", params)
 
 
 @proc.algorithm("OdometrySteeringAngleParkBrakeStats", "1.0.0", ParkBrakeApplied)
 def odometry_steering_angle_park_brake_stats(
     params: ExecutionParams,
-) -> Dict[str, float | None]:
+) -> StructResult:
     return _helper("odometry_steering_angle", params)
 
 
 @proc.algorithm("OdometryVehicleSpeedParkBrakeStats", "1.0.0", ParkBrakeApplied)
 def odometry_vehicle_speed_park_brake_stats(
     params: ExecutionParams,
-) -> Dict[str, float | None]:
+) -> StructResult:
     return _helper("odometry_vehicle_speed", params)
 
 
 @proc.algorithm("OdometryWheelSpeedFlParkBrakeStats", "1.0.0", ParkBrakeApplied)
 def odometry_wheel_speed_fl_park_brake_stats(
     params: ExecutionParams,
-) -> Dict[str, float | None]:
+) -> StructResult:
     return _helper("odometry_wheel_speed_fl", params)
 
 
 @proc.algorithm("OdometryWheelSpeedFrParkBrakeStats", "1.0.0", ParkBrakeApplied)
 def odometry_wheel_speed_fr_park_brake_stats(
     params: ExecutionParams,
-) -> Dict[str, float | None]:
+) -> StructResult:
     return _helper("odometry_wheel_speed_fr", params)
 
 
 @proc.algorithm("OdometryWheelSpeedMlParkBrakeStats", "1.0.0", ParkBrakeApplied)
 def odometry_wheel_speed_ml_park_brake_stats(
     params: ExecutionParams,
-) -> Dict[str, float | None]:
+) -> StructResult:
     return _helper("odometry_wheel_speed_ml", params)
 
 
 @proc.algorithm("OdometryWheelSpeedMrParkBrakeStats", "1.0.0", ParkBrakeApplied)
 def odometry_wheel_speed_mr_park_brake_stats(
     params: ExecutionParams,
-) -> Dict[str, float | None]:
+) -> StructResult:
     return _helper("odometry_wheel_speed_mr", params)
 
 
 @proc.algorithm("OdometryWheelSpeedRlParkBrakeStats", "1.0.0", ParkBrakeApplied)
 def odometry_wheel_speed_rl_park_brake_stats(
     params: ExecutionParams,
-) -> Dict[str, float | None]:
+) -> StructResult:
     return _helper("odometry_wheel_speed_rl", params)
 
 
 @proc.algorithm("OdometryWheelSpeedRrParkBrakeStats", "1.0.0", ParkBrakeApplied)
 def odometry_wheel_speed_rr_park_brake_stats(
     params: ExecutionParams,
-) -> Dict[str, float | None]:
+) -> StructResult:
     return _helper("odometry_wheel_speed_rr", params)
