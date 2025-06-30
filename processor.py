@@ -5,12 +5,15 @@ from orca_python import (
     Window,
     WindowType,
     StructResult,
+    ValueResult,
     NoneResult,
 )
+from orca_python.main import pb
 from windows import EveryMinute, HaltBrakeApplied, ParkBrakeApplied
 import datetime as dt
 from queries import ReadTelemetryForTripAndTime, ReadTelemParams
 import pandas as pd
+from typing import cast
 
 proc = Processor("ztbus_analyser")
 
@@ -23,7 +26,7 @@ def _find_contiguous_chunks_and_emit(
     params: ExecutionParams,
     emitting_window: WindowType,
     origin: str,
-    lookback_window: int = 20,
+    lookback_window: dt.timedelta = dt.timedelta(seconds= 20), # seconds
     max_lookback_iterations: int = 20,
 ):
     # if the first value is true, then we need to look back
@@ -39,8 +42,8 @@ def _find_contiguous_chunks_and_emit(
             _telem_lookback = pd.DataFrame(
                 ReadTelemetryForTripAndTime(
                     ReadTelemParams(
-                        time_from=dt.datetime.fromtimestamp(_lookback_time_from),
-                        time_to=dt.datetime.fromtimestamp(_lookback_time_to),
+                        time_from=_lookback_time_from,
+                        time_to=_lookback_time_to,
                         trip_id=trip_id,
                     )
                 )
@@ -60,7 +63,7 @@ def _find_contiguous_chunks_and_emit(
                 # ground previous groups as they would have already been captured
                 _idxMin = _telem_lookback[tgt_column][::-1].idxmin()
                 _telem_lookback.loc[
-                    :int(_idxMin),
+                    : int(_idxMin),
                     tgt_column,
                 ] = False
                 df = pd.concat([_telem_lookback, df])
@@ -69,12 +72,13 @@ def _find_contiguous_chunks_and_emit(
 
     # strip out leading false elements
     _idxMax = df[tgt_column].idxmax()
-    df = df[int(_idxMax):].reset_index(drop=True)
+    df = df[int(_idxMax) :].reset_index(drop=True)
 
     # find chunks where the brake is applied - via finite automata
     in_window = False
     start_idx = 0
     windows_emitted = 0
+    windows = []
     for ii, row in df.iterrows():
         if row[tgt_column] and not in_window:
             in_window = True
@@ -85,37 +89,41 @@ def _find_contiguous_chunks_and_emit(
             windows_emitted += 1
 
             # emit the window
-            EmitWindow(
-                window=Window(
-                    time_from=int(df.loc[start_idx, time_column].timestamp()),
-                    time_to=int(df.loc[ii - 1, time_column].timestamp()),
-                    name=emitting_window.name,
-                    version=emitting_window.version,
-                    origin=origin,
-                    metadata={"trip_id": trip_id},
+            windows.append(
+                EmitWindow(
+                    Window(
+                        time_from=dt.datetime.fromtimestamp(df.loc[start_idx, time_column].timestamp()),
+                        time_to=dt.datetime.fromtimestamp(df.loc[ii - 1, time_column].timestamp()),
+                        name=emitting_window.name,
+                        version=emitting_window.version,
+                        origin=origin,
+                        metadata={"trip_id": trip_id},
+                    )
                 )
             )
     return windows_emitted
 
 
 @proc.algorithm("FindHaltBrakeWindows", "1.0.0", EveryMinute)
-def find_when_applying_halt_brake(params: ExecutionParams) -> NoneResult:
+def find_when_applying_halt_brake(params: ExecutionParams) -> ValueResult:
     # get telemetry for this window
     telem = ReadTelemetryForTripAndTime(
         ReadTelemParams(
-            time_from=dt.datetime.fromtimestamp(params.window.time_from),
-            time_to=dt.datetime.fromtimestamp(params.window.time_to),
+            time_from=params.window.time_from,
+            time_to=params.window.time_to,
             trip_id=None,
         )
     )
     df = pd.DataFrame(telem)
     if df.empty:
-        return NoneResult()
+        return ValueResult(0)
+
+    windowsEmitted = 0
     for trip_id, trip_df in df.groupby("trip_id"):
         trip_df.sort_values("time", ascending=True, inplace=True)
         trip_df.reset_index(inplace=True, drop=True)
 
-        _find_contiguous_chunks_and_emit(
+        windowsEmitted += _find_contiguous_chunks_and_emit(
             df=trip_df,
             tgt_column="status_halt_brake_is_active",
             time_column="time",
@@ -125,36 +133,37 @@ def find_when_applying_halt_brake(params: ExecutionParams) -> NoneResult:
             origin="halt_brake_emitter",
         )
 
-    return NoneResult()
+    return ValueResult(windowsEmitted)
 
 
 @proc.algorithm("FindParkBrakeWindows", "1.0.0", EveryMinute)
-def find_when_applying_park_brake(params: ExecutionParams) -> NoneResult:
+def find_when_applying_park_brake(params: ExecutionParams) -> ValueResult:
     # get telemetry for this window
     telem = ReadTelemetryForTripAndTime(
         ReadTelemParams(
-            time_from=dt.datetime.fromtimestamp(params.window.time_from),
-            time_to=dt.datetime.fromtimestamp(params.window.time_to),
+            time_from=params.window.time_from,
+            time_to=params.window.time_to,
             trip_id=None,
         )
     )
     df = pd.DataFrame(telem)
     if df.empty:
-        return NoneResult()
+        return ValueResult(0)
+    windowsEmitted = 0
     for trip_id, trip_df in df.groupby("trip_id"):
         trip_df.sort_values("time", ascending=True, inplace=True)
         trip_df.reset_index(inplace=True, drop=True)
 
-        _find_contiguous_chunks_and_emit(
+        windowsEmitted += _find_contiguous_chunks_and_emit(
             df=trip_df,
-            tgt_column="status_halt_brake_is_active",
+            tgt_column="status_park_brake_is_active",
             time_column="time",
             trip_id=trip_id,
             params=params,
             emitting_window=ParkBrakeApplied,
-            origin="halt_brake_emitter",
+            origin="park_brake_emitter",
         )
-    return NoneResult()
+    return ValueResult(windowsEmitted)
 
 
 # algorithms
@@ -166,8 +175,8 @@ def halt_brake_ambient_temperature(params: ExecutionParams) -> StructResult:
 
     telem = ReadTelemetryForTripAndTime(
         ReadTelemParams(
-            time_from=dt.datetime.fromtimestamp(params.window.time_from),
-            time_to=dt.datetime.fromtimestamp(params.window.time_to),
+            time_from=params.window.time_from,
+            time_to=params.window.time_to,
             trip_id=trip_id,
         )
     )
@@ -188,8 +197,8 @@ def park_brake_ambient_temperature(params: ExecutionParams) -> StructResult:
 
     telem = ReadTelemetryForTripAndTime(
         ReadTelemParams(
-            time_from=dt.datetime.fromtimestamp(params.window.time_from),
-            time_to=dt.datetime.fromtimestamp(params.window.time_to),
+            time_from=params.window.time_from,
+            time_to=params.window.time_to,
             trip_id=trip_id,
         )
     )
@@ -209,8 +218,8 @@ def _helper(column: str, params: ExecutionParams) -> StructResult:
 
     telem = ReadTelemetryForTripAndTime(
         ReadTelemParams(
-            time_from=dt.datetime.fromtimestamp(params.window.time_from),
-            time_to=dt.datetime.fromtimestamp(params.window.time_to),
+            time_from=params.window.time_from,
+            time_to=params.window.time_to,
             trip_id=trip_id,
         )
     )

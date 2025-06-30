@@ -31,8 +31,8 @@ def FindAndEmitMinuteWindow():
     print("Emitted window")
     EmitWindow(
         Window(
-            time_from=int(start_time.timestamp()),
-            time_to=int(end_time.timestamp()),
+            time_from=start_time,
+            time_to=end_time,
             name=EveryMinute.name,
             version=EveryMinute.version,
             origin="simulator",
@@ -41,11 +41,11 @@ def FindAndEmitMinuteWindow():
 
 
 def Simulate():
-    # running at 12x speedup
-    schedule.every(5).seconds.do(FindAndEmitMinuteWindow)
+    # running at 60x speedup
+    schedule.every(0.5).seconds.do(FindAndEmitMinuteWindow)
     while True:
         schedule.run_pending()
-        time.sleep(1)
+        # time.sleep(1)
 
 
 if __name__ == "__main__":
