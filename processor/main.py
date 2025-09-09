@@ -6,16 +6,13 @@ from orca_python import (
     WindowType,
     StructResult,
     ValueResult,
-    NoneResult,
 )
-from orca_python.main import pb
 from windows import EveryMinute, HaltBrakeApplied, ParkBrakeApplied
 import datetime as dt
 from queries import ReadTelemetryForTripAndTime, ReadTelemParams
 import pandas as pd
-from typing import cast
 
-proc = Processor("ztbus_analyser")
+proc = Processor("analyser")
 
 
 def _find_contiguous_chunks_and_emit(
@@ -26,7 +23,7 @@ def _find_contiguous_chunks_and_emit(
     params: ExecutionParams,
     emitting_window: WindowType,
     origin: str,
-    lookback_window: dt.timedelta = dt.timedelta(seconds= 20), # seconds
+    lookback_window: dt.timedelta = dt.timedelta(seconds=20),  # seconds
     max_lookback_iterations: int = 20,
 ):
     # if the first value is true, then we need to look back
@@ -92,8 +89,12 @@ def _find_contiguous_chunks_and_emit(
             windows.append(
                 EmitWindow(
                     Window(
-                        time_from=dt.datetime.fromtimestamp(df.loc[start_idx, time_column].timestamp()),
-                        time_to=dt.datetime.fromtimestamp(df.loc[ii - 1, time_column].timestamp()),
+                        time_from=dt.datetime.fromtimestamp(
+                            df.loc[start_idx, time_column].timestamp()
+                        ),
+                        time_to=dt.datetime.fromtimestamp(
+                            df.loc[ii - 1, time_column].timestamp()
+                        ),
                         name=emitting_window.name,
                         version=emitting_window.version,
                         origin=origin,
