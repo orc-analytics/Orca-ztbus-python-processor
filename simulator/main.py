@@ -82,8 +82,8 @@ def FindAndEmitMinuteWindow(conn=Depends(get_db_conn)):
 
     EmitWindow(
         Window(
-            time_from=start_time,
-            time_to=end_time,
+            time_from=params["start_time"],
+            time_to=params["end_time"],
             name=EveryMinute.name,
             version=EveryMinute.version,
             origin="simulator",

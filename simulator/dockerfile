@@ -15,6 +15,7 @@ COPY pyproject.toml poetry.lock ./
 RUN poetry install --no-interaction --no-ansi --only=main --no-root
 
 COPY . .
+COPY ../poetry.lock ../pyproject.toml .
 
 # --- Runtime stage ---
 FROM python:3.13-slim-bookworm AS runtime
