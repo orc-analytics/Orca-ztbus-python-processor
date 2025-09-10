@@ -18,7 +18,7 @@ from windows import EveryMinute, HaltBrakeApplied, ParkBrakeApplied
 proc = Processor("analyser")
 
 
-def get_db_conn():
+def get_db_conn() -> PGConnection:
     with db_pool.connection() as conn:
         yield conn
 

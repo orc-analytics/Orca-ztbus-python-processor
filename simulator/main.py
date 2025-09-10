@@ -2,7 +2,7 @@ import datetime as dt
 from orca_python import EmitWindow, Window
 import psycopg2.extras
 from fastapi import FastAPI, Depends
-from typing import TypedDict
+from typing import TypedDict, Generator, Union, List
 from db import db_pool
 from psycopg2.extensions import connection as PGConnection
 from windows import EveryMinute
@@ -28,7 +28,6 @@ def CreateSimLogsTable(conn: PGConnection) -> None:
         );
     """
 
-    conn = None
     with conn.cursor() as cur:
         cur.execute(query)
         conn.commit()
@@ -38,29 +37,29 @@ app = FastAPI()
 
 
 @app.on_event("startup")
-def on_startup():
+def on_startup() -> None:
     # Initialize pool when app starts
     db_pool.init_pool(minconn=1, maxconn=5)
 
 
 @app.on_event("shutdown")
-def on_shutdown():
+def on_shutdown() -> None:
     # Close pool when app stops
     db_pool.close_pool()
 
 
-def get_db_conn():
+def get_db_conn() -> Generator[PGConnection, None, None]:
     with db_pool.connection() as conn:
         yield conn
 
 
 @app.get("/health")
-def health():
+def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
 @app.post("/")
-def FindAndEmitMinuteWindow(conn=Depends(get_db_conn)):
+def FindAndEmitMinuteWindow(conn: PGConnection = Depends(get_db_conn)) -> None:
     query = """
         SELECT
             s.id,
@@ -73,7 +72,18 @@ def FindAndEmitMinuteWindow(conn=Depends(get_db_conn)):
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute(query)
         results = cur.fetchall()
-        res = [ReadSimlogRow(**row) for row in results]
+        res: List[ReadSimlogRow] = [
+            ReadSimlogRow(
+                {
+                    "id": row["id"],
+                    "end_time": row["end_time"],
+                    "start_time": row["start_time"],
+                }
+            )
+            for row in results
+        ]
+
+        simlog: Union[ReadSimlogRow, List[ReadSimlogRow]]
         if len(res) > 0:
             simlog = res[0]
         else:
@@ -84,7 +94,9 @@ def FindAndEmitMinuteWindow(conn=Depends(get_db_conn)):
         start_time = dt.datetime(2021, 3, 9, 14, 15)
         end_time = start_time + dt.timedelta(seconds=60)
     else:
-        end_time = simlog.get("end_time")
+        # simlog is guaranteed to be ReadSimlogRow here since len(simlog) != 0
+        assert isinstance(simlog, dict)
+        end_time = simlog["end_time"]
         start_time = end_time
         end_time = end_time + dt.timedelta(seconds=60)
 
