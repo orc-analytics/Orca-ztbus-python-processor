@@ -167,7 +167,7 @@ def find_when_applying_park_brake(params: ExecutionParams) -> ValueResult:
     return ValueResult(windowsEmitted)
 
 
-# algorithms
+# --- Temperature ---
 @proc.algorithm("HaltBrakeAmbientTemperature", "1.0.0", HaltBrakeApplied)
 def halt_brake_ambient_temperature(params: ExecutionParams) -> StructResult:
     trip_id = params.window.metadata["trip_id"]
@@ -212,249 +212,124 @@ def park_brake_ambient_temperature(params: ExecutionParams) -> StructResult:
     )
 
 
-def _helper(column: str, params: ExecutionParams) -> StructResult:
-    trip_id = params.window.metadata["trip_id"]
-    if trip_id is None:
-        raise Exception("Require trip_id as metadata to the window")
-
+# --- Energy Efficiency ---
+@proc.algorithm("EnergyEfficiencyPerMinute", "1.0.0", EveryMinute)
+def energy_efficiency_per_minute(params: ExecutionParams) -> StructResult:
     telem = ReadTelemetryForTripAndTime(
         ReadTelemParams(
             time_from=params.window.time_from,
             time_to=params.window.time_to,
-            trip_id=trip_id,
+            trip_id=None,
         )
     )
     df = pd.DataFrame(telem)
     if df.empty:
         return StructResult(
-            {
-                "mean": None,
-                "std": None,
-                "min": None,
-                "25p": None,
-                "50p": None,
-                "75p": None,
-                "max": None,
-            }
+            {"kwh": None, "kwh_per_km": None, "kwh_per_passenger_km": None}
         )
 
-    stats = df[column].describe()
+    # Energy in kWh: power demand [kW] * time [h]
+    df["energy_kwh"] = df["electric_power_demand"].fillna(0) / 3600.0  # 1s samples
+    total_kwh = df["energy_kwh"].sum()
+
+    # Distance travelled from odometry speed (m/s * 1s)
+    df["dist_m"] = df["odometry_vehicle_speed"].fillna(0)
+    df["dist_m"] = df["dist_m"] * 1.0  # one second
+    total_km = df["dist_m"].sum() / 1000.0
+
+    # Passenger-km
+    passenger_km = (
+        df["itcs_number_of_passengers"].fillna(0) * df["dist_m"]
+    ).sum() / 1000.0
+
     return StructResult(
         {
-            "mean": stats["mean"],
-            "std": stats["std"],
-            "min": stats["min"],
-            "25p": stats["25%"],
-            "50p": stats["50%"],
-            "75p": stats["75%"],
-            "max": stats["max"],
+            "kwh": total_kwh,
+            "kwh_per_km": total_kwh / total_km if total_km > 0 else None,
+            "kwh_per_passenger_km": total_kwh / passenger_km
+            if passenger_km > 0
+            else None,
         }
     )
 
 
-@proc.algorithm("ElectricPowerDemandHaltBrakeStats", "1.0.0", HaltBrakeApplied)
-def electric_power_demand_halt_brake_stats(
-    params: ExecutionParams,
-) -> StructResult:
-    return _helper("electric_power_demand", params)
+# --- Service Efficiency ---
+@proc.algorithm("ServiceEfficiencyPerMinute", "1.0.0", EveryMinute)
+def service_efficiency_per_minute(params: ExecutionParams) -> StructResult:
+    telem = ReadTelemetryForTripAndTime(
+        ReadTelemParams(
+            time_from=params.window.time_from,
+            time_to=params.window.time_to,
+            trip_id=None,
+        )
+    )
+    df = pd.DataFrame(telem)
+    if df.empty:
+        return StructResult({"dwell_time_s": None, "door_open_fraction": None})
+
+    total_time = len(df)  # seconds
+    dwell_time = df[
+        (df["status_door_is_open"]) & (df["odometry_vehicle_speed"] < 0.1)
+    ].shape[0]
+
+    return StructResult(
+        {
+            "dwell_time_s": dwell_time,
+            "door_open_fraction": dwell_time / total_time if total_time > 0 else None,
+        }
+    )
 
 
-@proc.algorithm("TractionBrakePressureHaltBrakeStats", "1.0.0", HaltBrakeApplied)
-def traction_brake_pressure_halt_brake_stats(
-    params: ExecutionParams,
-) -> StructResult:
-    return _helper("traction_brake_pressure", params)
+# --- Comfort & Safety ---
+@proc.algorithm("ComfortAndSafetyPerMinute", "1.0.0", EveryMinute)
+def comfort_and_safety_per_minute(params: ExecutionParams) -> StructResult:
+    telem = ReadTelemetryForTripAndTime(
+        ReadTelemParams(
+            time_from=params.window.time_from,
+            time_to=params.window.time_to,
+            trip_id=None,
+        )
+    )
+    df = pd.DataFrame(telem)
+    if df.empty or "odometry_vehicle_speed" not in df.columns:
+        return StructResult({"mean_accel": None, "std_accel": None, "jerk_95p": None})
+
+    # Approximate acceleration (m/s^2) from 1s sampling
+    df["accel"] = df["odometry_vehicle_speed"].diff().fillna(0)
+    # Jerk (rate of change of acceleration)
+    df["jerk"] = df["accel"].diff().fillna(0)
+
+    return StructResult(
+        {
+            "mean_accel": df["accel"].mean(),
+            "std_accel": df["accel"].std(),
+            "jerk_95p": df["jerk"].quantile(0.95),
+        }
+    )
 
 
-@proc.algorithm("TractionTractionForceHaltBrakeStats", "1.0.0", HaltBrakeApplied)
-def traction_traction_force_halt_brake_stats(
-    params: ExecutionParams,
-) -> StructResult:
-    return _helper("traction_traction_force", params)
+# --- Asset Stress ---
+@proc.algorithm("AssetStressPerMinute", "1.0.0", EveryMinute)
+def asset_stress_per_minute(params: ExecutionParams) -> StructResult:
+    telem = ReadTelemetryForTripAndTime(
+        ReadTelemParams(
+            time_from=params.window.time_from,
+            time_to=params.window.time_to,
+            trip_id=None,
+        )
+    )
+    df = pd.DataFrame(telem)
+    if df.empty:
+        return StructResult({"articulation_var": None, "brake_pressure_mean": None})
+
+    return StructResult(
+        {
+            "articulation_var": df["odometry_articulation_angle"].var(),
+            "brake_pressure_mean": df["traction_brake_pressure"].mean(),
+        }
+    )
 
 
-@proc.algorithm("GnssAltitudeHaltBrakeStats", "1.0.0", HaltBrakeApplied)
-def gnss_altitude_halt_brake_stats(params: ExecutionParams) -> StructResult:
-    return _helper("gnss_altitude", params)
-
-
-@proc.algorithm("GnssCourseHaltBrakeStats", "1.0.0", HaltBrakeApplied)
-def gnss_course_halt_brake_stats(params: ExecutionParams) -> StructResult:
-    return _helper("gnss_course", params)
-
-
-@proc.algorithm("GnssLatitudeHaltBrakeStats", "1.0.0", HaltBrakeApplied)
-def gnss_latitude_halt_brake_stats(params: ExecutionParams) -> StructResult:
-    return _helper("gnss_latitude", params)
-
-
-@proc.algorithm("GnssLongitudeHaltBrakeStats", "1.0.0", HaltBrakeApplied)
-def gnss_longitude_halt_brake_stats(params: ExecutionParams) -> StructResult:
-    return _helper("gnss_longitude", params)
-
-
-@proc.algorithm("OdometryArticulationAngleHaltBrakeStats", "1.0.0", HaltBrakeApplied)
-def odometry_articulation_angle_halt_brake_stats(
-    params: ExecutionParams,
-) -> StructResult:
-    return _helper("odometry_articulation_angle", params)
-
-
-@proc.algorithm("OdometrySteeringAngleHaltBrakeStats", "1.0.0", HaltBrakeApplied)
-def odometry_steering_angle_halt_brake_stats(
-    params: ExecutionParams,
-) -> StructResult:
-    return _helper("odometry_steering_angle", params)
-
-
-@proc.algorithm("OdometryVehicleSpeedHaltBrakeStats", "1.0.0", HaltBrakeApplied)
-def odometry_vehicle_speed_halt_brake_stats(
-    params: ExecutionParams,
-) -> StructResult:
-    return _helper("odometry_vehicle_speed", params)
-
-
-@proc.algorithm("OdometryWheelSpeedFlHaltBrakeStats", "1.0.0", HaltBrakeApplied)
-def odometry_wheel_speed_fl_halt_brake_stats(
-    params: ExecutionParams,
-) -> StructResult:
-    return _helper("odometry_wheel_speed_fl", params)
-
-
-@proc.algorithm("OdometryWheelSpeedFrHaltBrakeStats", "1.0.0", HaltBrakeApplied)
-def odometry_wheel_speed_fr_halt_brake_stats(
-    params: ExecutionParams,
-) -> StructResult:
-    return _helper("odometry_wheel_speed_fr", params)
-
-
-@proc.algorithm("OdometryWheelSpeedMlHaltBrakeStats", "1.0.0", HaltBrakeApplied)
-def odometry_wheel_speed_ml_halt_brake_stats(
-    params: ExecutionParams,
-) -> StructResult:
-    return _helper("odometry_wheel_speed_ml", params)
-
-
-@proc.algorithm("OdometryWheelSpeedMrHaltBrakeStats", "1.0.0", HaltBrakeApplied)
-def odometry_wheel_speed_mr_halt_brake_stats(
-    params: ExecutionParams,
-) -> StructResult:
-    return _helper("odometry_wheel_speed_mr", params)
-
-
-@proc.algorithm("OdometryWheelSpeedRlHaltBrakeStats", "1.0.0", HaltBrakeApplied)
-def odometry_wheel_speed_rl_halt_brake_stats(
-    params: ExecutionParams,
-) -> StructResult:
-    return _helper("odometry_wheel_speed_rl", params)
-
-
-@proc.algorithm("OdometryWheelSpeedRrHaltBrakeStats", "1.0.0", HaltBrakeApplied)
-def odometry_wheel_speed_rr_halt_brake_stats(
-    params: ExecutionParams,
-) -> StructResult:
-    return _helper("odometry_wheel_speed_rr", params)
-
-
-@proc.algorithm("ElectricPowerDemandParkBrakeStats", "1.0.0", ParkBrakeApplied)
-def electric_power_demand_park_brake_stats(
-    params: ExecutionParams,
-) -> StructResult:
-    return _helper("electric_power_demand", params)
-
-
-@proc.algorithm("TractionBrakePressureParkBrakeStats", "1.0.0", ParkBrakeApplied)
-def traction_brake_pressure_park_brake_stats(
-    params: ExecutionParams,
-) -> StructResult:
-    return _helper("traction_brake_pressure", params)
-
-
-@proc.algorithm("TractionTractionForceParkBrakeStats", "1.0.0", ParkBrakeApplied)
-def traction_traction_force_park_brake_stats(
-    params: ExecutionParams,
-) -> StructResult:
-    return _helper("traction_traction_force", params)
-
-
-@proc.algorithm("GnssAltitudeParkBrakeStats", "1.0.0", ParkBrakeApplied)
-def gnss_altitude_park_brake_stats(params: ExecutionParams) -> StructResult:
-    return _helper("gnss_altitude", params)
-
-
-@proc.algorithm("GnssCourseParkBrakeStats", "1.0.0", ParkBrakeApplied)
-def gnss_course_park_brake_stats(params: ExecutionParams) -> StructResult:
-    return _helper("gnss_course", params)
-
-
-@proc.algorithm("GnssLatitudeParkBrakeStats", "1.0.0", ParkBrakeApplied)
-def gnss_latitude_park_brake_stats(params: ExecutionParams) -> StructResult:
-    return _helper("gnss_latitude", params)
-
-
-@proc.algorithm("GnssLongitudeParkBrakeStats", "1.0.0", ParkBrakeApplied)
-def gnss_longitude_park_brake_stats(params: ExecutionParams) -> StructResult:
-    return _helper("gnss_longitude", params)
-
-
-@proc.algorithm("OdometryArticulationAngleParkBrakeStats", "1.0.0", ParkBrakeApplied)
-def odometry_articulation_angle_park_brake_stats(
-    params: ExecutionParams,
-) -> StructResult:
-    return _helper("odometry_articulation_angle", params)
-
-
-@proc.algorithm("OdometrySteeringAngleParkBrakeStats", "1.0.0", ParkBrakeApplied)
-def odometry_steering_angle_park_brake_stats(
-    params: ExecutionParams,
-) -> StructResult:
-    return _helper("odometry_steering_angle", params)
-
-
-@proc.algorithm("OdometryVehicleSpeedParkBrakeStats", "1.0.0", ParkBrakeApplied)
-def odometry_vehicle_speed_park_brake_stats(
-    params: ExecutionParams,
-) -> StructResult:
-    return _helper("odometry_vehicle_speed", params)
-
-
-@proc.algorithm("OdometryWheelSpeedFlParkBrakeStats", "1.0.0", ParkBrakeApplied)
-def odometry_wheel_speed_fl_park_brake_stats(
-    params: ExecutionParams,
-) -> StructResult:
-    return _helper("odometry_wheel_speed_fl", params)
-
-
-@proc.algorithm("OdometryWheelSpeedFrParkBrakeStats", "1.0.0", ParkBrakeApplied)
-def odometry_wheel_speed_fr_park_brake_stats(
-    params: ExecutionParams,
-) -> StructResult:
-    return _helper("odometry_wheel_speed_fr", params)
-
-
-@proc.algorithm("OdometryWheelSpeedMlParkBrakeStats", "1.0.0", ParkBrakeApplied)
-def odometry_wheel_speed_ml_park_brake_stats(
-    params: ExecutionParams,
-) -> StructResult:
-    return _helper("odometry_wheel_speed_ml", params)
-
-
-@proc.algorithm("OdometryWheelSpeedMrParkBrakeStats", "1.0.0", ParkBrakeApplied)
-def odometry_wheel_speed_mr_park_brake_stats(
-    params: ExecutionParams,
-) -> StructResult:
-    return _helper("odometry_wheel_speed_mr", params)
-
-
-@proc.algorithm("OdometryWheelSpeedRlParkBrakeStats", "1.0.0", ParkBrakeApplied)
-def odometry_wheel_speed_rl_park_brake_stats(
-    params: ExecutionParams,
-) -> StructResult:
-    return _helper("odometry_wheel_speed_rl", params)
-
-
-@proc.algorithm("OdometryWheelSpeedRrParkBrakeStats", "1.0.0", ParkBrakeApplied)
-def odometry_wheel_speed_rr_park_brake_stats(
-    params: ExecutionParams,
-) -> StructResult:
-    return _helper("odometry_wheel_speed_rr", params)
+if __name__ == "__main__":
+    proc.Register()
+    proc.Start()

@@ -1,0 +1,31 @@
+# --- Builder stage ---
+FROM python:3.13-slim-bookworm AS builder
+
+ENV POETRY_NO_INTERACTION=1 \
+    POETRY_VIRTUALENVS_CREATE=false \
+    POETRY_CACHE_DIR=/var/cache/pypoetry \
+    POETRY_HOME=/usr/local
+
+WORKDIR /app
+
+RUN pip install poetry
+
+COPY poetry.lock pyproject.toml ./
+
+RUN poetry install --no-interaction --no-ansi --only=main --no-root
+
+COPY processor/* .
+
+# --- Runtime stage ---
+FROM python:3.13-slim-bookworm AS runtime
+
+WORKDIR /app
+ENV PORT=8080 PYTHONUNBUFFERED=1
+
+# copy installed deps and app from builder
+COPY --from=builder /usr/local /usr/local
+COPY --from=builder /app /app
+
+EXPOSE 8080
+
+# CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]

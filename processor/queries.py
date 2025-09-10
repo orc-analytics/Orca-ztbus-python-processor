@@ -1,9 +1,10 @@
 import datetime as dt
 from typing import TypedDict, Optional
-from db import GetConnection, ReturnConnection
 import psycopg2.extras
 import functools
 from frozendict import frozendict
+
+from psycopg2.extensions import connection as PGConnection
 
 
 def freezeargs(func):
@@ -62,7 +63,7 @@ class ReadTelemResultRow(TypedDict):
 @freezeargs
 @functools.lru_cache
 def ReadTelemetryForTripAndTime(
-    params: ReadTelemParams,
+    params: ReadTelemParams, conn: PGConnection
 ) -> ReadTelemResultRow:
     # validate that at least one parameter is provided
     if not any([params.get("trip_id"), params.get("time_from"), params.get("time_to")]):
@@ -115,18 +116,11 @@ def ReadTelemetryForTripAndTime(
     elif params.get("time_to"):
         BASE_QUERY += " AND time <= %(time_to)s"
 
-    conn = None
-
-    try:
-        conn = GetConnection()
-        with conn.cursor(
-            name="telem_cursor", cursor_factory=psycopg2.extras.RealDictCursor
-        ) as cur:
-            cur.execute(BASE_QUERY, params)
-            return [ReadTelemResultRow(**row) for row in cur]
-    finally:
-        if conn:
-            ReturnConnection(conn)
+    with conn.cursor(
+        name="telem_cursor", cursor_factory=psycopg2.extras.RealDictCursor
+    ) as cur:
+        cur.execute(BASE_QUERY, params)
+        return [ReadTelemResultRow(**row) for row in cur]
 
 
 class ReadTripsFromTripIdParams(TypedDict):
@@ -151,7 +145,9 @@ class ReadTripsFromTripIdRow(TypedDict):
     amb_temperature_max: float
 
 
-def ReadTripsFromTripId(params: ReadTripsFromTripIdParams) -> ReadTripsFromTripIdRow:
+def ReadTripsFromTripId(
+    params: ReadTripsFromTripIdParams, conn: PGConnection
+) -> ReadTripsFromTripIdRow:
     query = """
         SELECT
             t.id,
@@ -173,35 +169,7 @@ def ReadTripsFromTripId(params: ReadTripsFromTripIdParams) -> ReadTripsFromTripI
         WHERE t.id = %(trip_id)s LIMIT 1;
     """
 
-    conn = None
-    try:
-        conn = GetConnection()
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(query, params)
-            results = cur.fetchall()
-            return [ReadTelemResultRow(**row) for row in results][0]
-    finally:
-        if conn:
-            ReturnConnection(conn)
-
-
-def CreateSimLogsTable() -> None:
-    query = """
-        CREATE TABLE IF NOT EXISTS sim_logs (
-            id SERIAL PRIMARY KEY,
-            start_time TIMESTAMP NOT NULL,
-            end_time TIMESTAMP NOT NULL
-        );
-    """
-
-    conn = None
-    try:
-        conn = GetConnection()
-        with conn.cursor() as cur:
-            cur.execute(query)
-            conn.commit()
-    except Exception as e:
-        raise Exception(f"Could not create simlogs table: {e}")
-    finally:
-        if conn:
-            ReturnConnection(conn)
+    with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        cur.execute(query, params)
+        results = cur.fetchall()
+        return [ReadTelemResultRow(**row) for row in results][0]

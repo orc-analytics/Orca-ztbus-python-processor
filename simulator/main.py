@@ -6,6 +6,8 @@ from fastapi import FastAPI, Depends
 from typing import TypedDict
 from db import db_pool
 
+from psycopg2.extensions import connection as PGConnection
+
 
 class ReadSimlogRow(TypedDict):
     id: int
@@ -16,6 +18,21 @@ class ReadSimlogRow(TypedDict):
 class CreateSimlogEntryParams(TypedDict):
     start_time: dt.datetime
     end_time: dt.datetime
+
+
+def CreateSimLogsTable(conn: PGConnection) -> None:
+    query = """
+        CREATE TABLE IF NOT EXISTS sim_logs (
+            id SERIAL PRIMARY KEY,
+            start_time TIMESTAMP NOT NULL,
+            end_time TIMESTAMP NOT NULL
+        );
+    """
+
+    conn = None
+    with conn.cursor() as cur:
+        cur.execute(query)
+        conn.commit()
 
 
 app = FastAPI()
