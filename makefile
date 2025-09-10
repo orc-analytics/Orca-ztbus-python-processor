@@ -29,9 +29,10 @@ deploy: push
 	    --update-secrets=ZTBUS_USER=ZTBUS_USER:latest \
 	    --update-secrets=ZTBUS_PASS=ZTBUS_PASS:latest \
 	    --update-secrets=ZTBUS_PORT=ZTBUS_PORT:latest \
-	    --update-secrets=ORCA_CORE=ORCA_CORE_URL:latest \
+	    --update-secrets=ORCA_CORE=ORCA_CORE:latest \
 	    --update-secrets=PROCESSOR_PORT=PROCESSOR_PORT:latest \
 	    --update-secrets=PROCESSOR_ADDRESS=PROCESSOR_ADDRESS:latest \
+	    --update-secrets=ENV=ENV:latest \
 	    --vpc-connector="projects/$(PROJECT_ID)/locations/$(DEPLOY_REGION)/connectors/orca-network-connector" \
 	    --vpc-egress=private-ranges-only \
 	    --ingress=internal \
