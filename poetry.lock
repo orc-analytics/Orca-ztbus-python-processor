@@ -445,14 +445,14 @@ files = [
 
 [[package]]
 name = "orca-python"
-version = "0.7.8"
+version = "0.7.10"
 description = "Python SDK for the Predixus Orca product"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "orca_python-0.7.8-py3-none-any.whl", hash = "sha256:af93dc3f076733455db172ddb231fe04ca955c24bef323d3ce0e4fb3c28dae25"},
-    {file = "orca_python-0.7.8.tar.gz", hash = "sha256:337a80f3b21575c17604e624242b35d4f7b41e19aebc2f2e60f576ffe6cf7d31"},
+    {file = "orca_python-0.7.10-py3-none-any.whl", hash = "sha256:1613253666901818a547c17bf8bb5e4bc9a7cd8d398a2f44b74056c52e34db1a"},
+    {file = "orca_python-0.7.10.tar.gz", hash = "sha256:5b94a6112fb27eaece722b05650a6ea0c0fef74088670bee0560b0fe24889c4a"},
 ]
 
 [package.dependencies]
@@ -1136,4 +1136,4 @@ standard = ["colorama (>=0.4) ; sys_platform == \"win32\"", "httptools (>=0.6.3)
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.13"
-content-hash = "579bdb6c033caddbacb3bd4aca992b9b1849bf68e96058724db5cf86bd8c7258"
+content-hash = "db65afae898ec07dca17113b3ff627a1f3b8cea7cf2495d9749184ad37212e30"
