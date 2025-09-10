@@ -7,12 +7,20 @@ from orca_python import (
     StructResult,
     ValueResult,
 )
-from windows import EveryMinute, HaltBrakeApplied, ParkBrakeApplied
 import datetime as dt
 from queries import ReadTelemetryForTripAndTime, ReadTelemParams
 import pandas as pd
+from db import db_pool
+from psycopg2.extensions import connection as PGConnection
+
+from windows import EveryMinute, HaltBrakeApplied, ParkBrakeApplied
 
 proc = Processor("analyser")
+
+
+def get_db_conn():
+    with db_pool.connection() as conn:
+        yield conn
 
 
 def _find_contiguous_chunks_and_emit(
@@ -23,6 +31,7 @@ def _find_contiguous_chunks_and_emit(
     params: ExecutionParams,
     emitting_window: WindowType,
     origin: str,
+    conn: PGConnection,
     lookback_window: dt.timedelta = dt.timedelta(seconds=20),  # seconds
     max_lookback_iterations: int = 20,
 ):
@@ -42,7 +51,8 @@ def _find_contiguous_chunks_and_emit(
                         time_from=_lookback_time_from,
                         time_to=_lookback_time_to,
                         trip_id=trip_id,
-                    )
+                    ),
+                    conn,
                 )
             )
 
@@ -107,13 +117,16 @@ def _find_contiguous_chunks_and_emit(
 
 @proc.algorithm("FindHaltBrakeWindows", "1.0.0", EveryMinute)
 def find_when_applying_halt_brake(params: ExecutionParams) -> ValueResult:
+    conn = get_db_conn()
+
     # get telemetry for this window
     telem = ReadTelemetryForTripAndTime(
         ReadTelemParams(
             time_from=params.window.time_from,
             time_to=params.window.time_to,
             trip_id=None,
-        )
+        ),
+        conn,
     )
     df = pd.DataFrame(telem)
     if df.empty:
@@ -132,6 +145,7 @@ def find_when_applying_halt_brake(params: ExecutionParams) -> ValueResult:
             params=params,
             emitting_window=HaltBrakeApplied,
             origin="halt_brake_emitter",
+            conn=conn,
         )
 
     return ValueResult(windowsEmitted)
@@ -139,13 +153,16 @@ def find_when_applying_halt_brake(params: ExecutionParams) -> ValueResult:
 
 @proc.algorithm("FindParkBrakeWindows", "1.0.0", EveryMinute)
 def find_when_applying_park_brake(params: ExecutionParams) -> ValueResult:
+    conn = get_db_conn()
+
     # get telemetry for this window
     telem = ReadTelemetryForTripAndTime(
         ReadTelemParams(
             time_from=params.window.time_from,
             time_to=params.window.time_to,
             trip_id=None,
-        )
+        ),
+        conn,
     )
     df = pd.DataFrame(telem)
     if df.empty:
@@ -163,6 +180,7 @@ def find_when_applying_park_brake(params: ExecutionParams) -> ValueResult:
             params=params,
             emitting_window=ParkBrakeApplied,
             origin="park_brake_emitter",
+            conn=conn,
         )
     return ValueResult(windowsEmitted)
 
@@ -170,6 +188,8 @@ def find_when_applying_park_brake(params: ExecutionParams) -> ValueResult:
 # --- Temperature ---
 @proc.algorithm("HaltBrakeAmbientTemperature", "1.0.0", HaltBrakeApplied)
 def halt_brake_ambient_temperature(params: ExecutionParams) -> StructResult:
+    conn = get_db_conn()
+
     trip_id = params.window.metadata["trip_id"]
     if trip_id is None:
         raise Exception("Require trip_id as metadata to the window")
@@ -179,7 +199,8 @@ def halt_brake_ambient_temperature(params: ExecutionParams) -> StructResult:
             time_from=params.window.time_from,
             time_to=params.window.time_to,
             trip_id=trip_id,
-        )
+        ),
+        conn,
     )
     df = pd.DataFrame(telem)
     median = df["temperature_ambient"].median()
@@ -192,6 +213,8 @@ def halt_brake_ambient_temperature(params: ExecutionParams) -> StructResult:
 
 @proc.algorithm("ParkBrakeAmbientTemperature", "1.0.0", ParkBrakeApplied)
 def park_brake_ambient_temperature(params: ExecutionParams) -> StructResult:
+    conn = get_db_conn()
+
     trip_id = params.window.metadata["trip_id"]
     if trip_id is None:
         raise Exception("Require trip_id as metadata to the window")
@@ -201,7 +224,8 @@ def park_brake_ambient_temperature(params: ExecutionParams) -> StructResult:
             time_from=params.window.time_from,
             time_to=params.window.time_to,
             trip_id=trip_id,
-        )
+        ),
+        conn,
     )
     df = pd.DataFrame(telem)
     median = df["temperature_ambient"].median()
@@ -215,12 +239,15 @@ def park_brake_ambient_temperature(params: ExecutionParams) -> StructResult:
 # --- Energy Efficiency ---
 @proc.algorithm("EnergyEfficiencyPerMinute", "1.0.0", EveryMinute)
 def energy_efficiency_per_minute(params: ExecutionParams) -> StructResult:
+    conn = get_db_conn()
+
     telem = ReadTelemetryForTripAndTime(
         ReadTelemParams(
             time_from=params.window.time_from,
             time_to=params.window.time_to,
             trip_id=None,
-        )
+        ),
+        conn,
     )
     df = pd.DataFrame(telem)
     if df.empty:
@@ -256,12 +283,15 @@ def energy_efficiency_per_minute(params: ExecutionParams) -> StructResult:
 # --- Service Efficiency ---
 @proc.algorithm("ServiceEfficiencyPerMinute", "1.0.0", EveryMinute)
 def service_efficiency_per_minute(params: ExecutionParams) -> StructResult:
+    conn = get_db_conn()
+
     telem = ReadTelemetryForTripAndTime(
         ReadTelemParams(
             time_from=params.window.time_from,
             time_to=params.window.time_to,
             trip_id=None,
-        )
+        ),
+        conn,
     )
     df = pd.DataFrame(telem)
     if df.empty:
@@ -283,12 +313,15 @@ def service_efficiency_per_minute(params: ExecutionParams) -> StructResult:
 # --- Comfort & Safety ---
 @proc.algorithm("ComfortAndSafetyPerMinute", "1.0.0", EveryMinute)
 def comfort_and_safety_per_minute(params: ExecutionParams) -> StructResult:
+    conn = get_db_conn()
+
     telem = ReadTelemetryForTripAndTime(
         ReadTelemParams(
             time_from=params.window.time_from,
             time_to=params.window.time_to,
             trip_id=None,
-        )
+        ),
+        conn,
     )
     df = pd.DataFrame(telem)
     if df.empty or "odometry_vehicle_speed" not in df.columns:
@@ -311,12 +344,15 @@ def comfort_and_safety_per_minute(params: ExecutionParams) -> StructResult:
 # --- Asset Stress ---
 @proc.algorithm("AssetStressPerMinute", "1.0.0", EveryMinute)
 def asset_stress_per_minute(params: ExecutionParams) -> StructResult:
+    conn = get_db_conn()
+
     telem = ReadTelemetryForTripAndTime(
         ReadTelemParams(
             time_from=params.window.time_from,
             time_to=params.window.time_to,
             trip_id=None,
-        )
+        ),
+        conn,
     )
     df = pd.DataFrame(telem)
     if df.empty:

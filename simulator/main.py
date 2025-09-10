@@ -1,12 +1,11 @@
 import datetime as dt
 from orca_python import EmitWindow, Window
 import psycopg2.extras
-from windows import EveryMinute
 from fastapi import FastAPI, Depends
 from typing import TypedDict
 from db import db_pool
-
 from psycopg2.extensions import connection as PGConnection
+from windows import EveryMinute
 
 
 class ReadSimlogRow(TypedDict):
