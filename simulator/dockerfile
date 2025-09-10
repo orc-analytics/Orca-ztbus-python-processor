@@ -10,12 +10,11 @@ WORKDIR /app
 
 RUN pip install poetry
 
-COPY pyproject.toml poetry.lock ./
+COPY poetry.lock pyproject.toml ./
 
 RUN poetry install --no-interaction --no-ansi --only=main --no-root
 
-COPY . .
-COPY ../poetry.lock ../pyproject.toml .
+COPY simulator/* .
 
 # --- Runtime stage ---
 FROM python:3.13-slim-bookworm AS runtime

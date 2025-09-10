@@ -10,7 +10,7 @@ requires-python = ">=3.13"
 dependencies = [
     "psycopg2-binary[pool] (>=2.9.10,<3.0.0)",
     "schedule (>=1.2.2,<2.0.0)",
-    "orca-python >=0.7.0",
+    "orca-python (>=0.7.6,<0.8.0)",
     "pandas (>=2.3.0,<3.0.0)",
     "frozendict (>=2.4.6,<3.0.0)",
     "pandas-stubs (>=2.2.3.250527,<3.0.0.0)",
