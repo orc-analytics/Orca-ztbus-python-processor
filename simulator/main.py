@@ -58,8 +58,7 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.post("/")
-def FindAndEmitMinuteWindow(conn: PGConnection = Depends(get_db_conn)) -> None:
+def _helper(conn: PGConnection) -> None:
     query = """
         SELECT
             s.id,
@@ -117,3 +116,19 @@ def FindAndEmitMinuteWindow(conn: PGConnection = Depends(get_db_conn)) -> None:
             origin="simulator",
         )
     )
+
+
+@app.post("/")
+def FindAndEmitMinuteWindow(conn: PGConnection = Depends(get_db_conn)) -> None:
+    _helper(next(conn))
+
+
+if __name__ == "__main__":
+    import schedule
+
+    conn = next(get_db_conn())
+
+    schedule.every(1).second.do(_helper(conn))
+
+    while True:
+        schedule.run_pending()

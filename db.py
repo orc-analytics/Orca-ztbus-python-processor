@@ -6,12 +6,10 @@ from typing import Generator
 
 
 class PostgresPool:
-    def __init__(self) -> None:
-        self._pool: pool.SimpleConnectionPool | None = None
+    _pool: pool.SimpleConnectionPool | None = None
 
-    def init_pool(self, minconn: int = 1, maxconn: int = 10) -> None:
+    def __init__(self, minconn: int = 1, maxconn: int = 10) -> None:
         if self._pool is None:
-            print(os.environ["ZTBUS_PORT"])
             self._pool = pool.SimpleConnectionPool(
                 minconn=minconn,
                 maxconn=maxconn,
