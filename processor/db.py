@@ -6,28 +6,26 @@ from typing import Generator
 
 
 class PostgresPool:
-    _pool: pool.SimpleConnectionPool | None = None
-
     def __init__(self, minconn: int = 1, maxconn: int = 10) -> None:
-        if self._pool is None:
-            self._pool = pool.SimpleConnectionPool(
-                minconn=minconn,
-                maxconn=maxconn,
-                host=os.environ["ZTBUS_ADDR"],
-                database=os.environ["ZTBUS_DB"],
-                user=os.environ["ZTBUS_USER"],
-                password=os.environ["ZTBUS_PASS"],
-                port=os.environ["ZTBUS_PORT"],
-            )
+        # Make pool an instance attribute, not class attribute
+        self._pool: None | pool.SimpleConnectionPool = pool.SimpleConnectionPool(
+            minconn=minconn,
+            maxconn=maxconn,
+            host=os.environ["ZTBUS_ADDR"],
+            database=os.environ["ZTBUS_DB"],
+            user=os.environ["ZTBUS_USER"],
+            password=os.environ["ZTBUS_PASS"],
+            port=os.environ["ZTBUS_PORT"],
+        )
 
     def close_pool(self) -> None:
-        if self._pool:
+        if hasattr(self, "_pool") and self._pool:
             self._pool.closeall()
             self._pool = None
 
     @contextmanager
     def connection(self) -> Generator[PGConnection, None, None]:
-        if not self._pool:
+        if not hasattr(self, "_pool") or not self._pool:
             raise RuntimeError("Connection pool is not initialised")
         conn = self._pool.getconn()
         try:

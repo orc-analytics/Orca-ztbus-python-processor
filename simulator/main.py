@@ -2,7 +2,7 @@ import datetime as dt
 from orca_python import EmitWindow, Window
 import psycopg2.extras
 from fastapi import FastAPI, Depends
-from typing import TypedDict, Generator, Union, List
+from typing import TypedDict, Generator, List
 from db import db_pool
 from psycopg2.extensions import connection as PGConnection
 from windows import EveryMinute
@@ -38,8 +38,9 @@ app = FastAPI()
 
 @app.on_event("startup")
 def on_startup() -> None:
-    # Initialize pool when app starts
-    db_pool.init_pool(minconn=1, maxconn=5)
+    # Create the table on startup
+    with db_pool.connection() as conn:
+        CreateSimLogsTable(conn)
 
 
 @app.on_event("shutdown")
@@ -73,40 +74,33 @@ def _helper(conn: PGConnection) -> None:
         results = cur.fetchall()
         res: List[ReadSimlogRow] = [
             ReadSimlogRow(
-                {
-                    "id": row["id"],
-                    "end_time": row["end_time"],
-                    "start_time": row["start_time"],
-                }
+                id=row["id"],
+                end_time=row["end_time"],
+                start_time=row["start_time"],
             )
             for row in results
         ]
 
-        simlog: Union[ReadSimlogRow, List[ReadSimlogRow]]
-        if len(res) > 0:
-            simlog = res[0]
-        else:
-            simlog = res
-
-    if len(simlog) == 0:
+    if len(res) == 0:
         # earliest time where both busses are active: 2021-03-09 14:15:05.000
         start_time = dt.datetime(2021, 3, 9, 14, 15)
         end_time = start_time + dt.timedelta(seconds=60)
     else:
-        # simlog is guaranteed to be ReadSimlogRow here since len(simlog) != 0
-        assert isinstance(simlog, dict)
+        # res[0] is guaranteed to exist since len(res) != 0
+        simlog = res[0]
         end_time = simlog["end_time"]
         start_time = end_time
         end_time = end_time + dt.timedelta(seconds=60)
 
-    query = """INSERT INTO sim_logs (start_time,end_time) VALUES (%(start_time)s, %(end_time)s)"""
-
+    # Insert new simlog entry
+    insert_query = """INSERT INTO sim_logs (start_time, end_time) VALUES (%(start_time)s, %(end_time)s)"""
     params = CreateSimlogEntryParams(start_time=start_time, end_time=end_time)
 
     with conn.cursor() as cur:
-        cur.execute(query, params)
+        cur.execute(insert_query, params)
         conn.commit()
 
+    # Emit the window
     EmitWindow(
         Window(
             time_from=params["start_time"],
@@ -120,15 +114,28 @@ def _helper(conn: PGConnection) -> None:
 
 @app.post("/")
 def FindAndEmitMinuteWindow(conn: PGConnection = Depends(get_db_conn)) -> None:
-    _helper(next(conn))
+    _helper(conn)
 
 
 if __name__ == "__main__":
     import schedule
+    import time
 
-    conn = next(get_db_conn())
+    # Initialize table if running as script
+    with db_pool.connection() as conn:
+        CreateSimLogsTable(conn)
 
-    schedule.every(1).second.do(_helper(conn))
+    def scheduled_helper():
+        """Wrapper function that gets its own connection"""
+        with db_pool.connection() as conn:
+            _helper(conn)
 
-    while True:
-        schedule.run_pending()
+    schedule.every(1).second.do(scheduled_helper)
+
+    try:
+        while True:
+            schedule.run_pending()
+            time.sleep(0.1)  # Small sleep to prevent busy waiting
+    except KeyboardInterrupt:
+        print("Shutting down...")
+        db_pool.close_pool()
