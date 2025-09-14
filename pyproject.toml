@@ -1,0 +1,43 @@
+[project]
+name = "orca-ztbus-python-processor"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Predixus",email = "contact@predixus.com"}
+]
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "psycopg2-binary[pool] (>=2.9.10,<3.0.0)",
+    "schedule (>=1.2.2,<2.0.0)",
+    "orca-python (>=0.7.11,<0.8.0)",
+    "pandas (>=2.3.0,<3.0.0)",
+    "frozendict (>=2.4.6,<3.0.0)",
+    "pandas-stubs (>=2.2.3.250527,<3.0.0.0)",
+    "fastapi (>=0.116.1,<0.117.0)",
+    "uvicorn (>=0.35.0,<0.36.0)"
+]
+package-mode = false
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.group.dev.dependencies]
+types-psycopg2 = "^2.9.21.20250516"
+tqdm = "^4.67.1"
+poethepoet = "^0.35.0"
+numpy = "^2.3.1"
+mypy = "^1.16.1"
+ruff = "^0.12.0"
+
+[tool.poe.tasks]
+_lint_fix = "ruff check ./*.py ./simulator/*.py ./processor/*.py --fix "
+_type = "mypy ./*.py ./simulator/*.py ./processor/*.py --strict --warn-unused-ignores --warn-redundant-casts "
+_format = "ruff format ./*.py ./simulator/*.py ./processor/*.py"
+
+format = ["_format", "_lint_fix"]
+lint = ["_format", "_lint_fix", "_type"]
+
+
+
