@@ -34,7 +34,7 @@ deploy: push
 	    --update-secrets=PROCESSOR_ADDRESS=PROCESSOR_ADDRESS:latest \
 	    --update-secrets=ENV=ENV:latest \
 	    --vpc-connector="projects/$(PROJECT_ID)/locations/$(DEPLOY_REGION)/connectors/orca-network-connector" \
-	    --vpc-egress=private-ranges-only \
+	    --vpc-egress=all-traffic \
 	    --ingress=internal \
 	    --tag=production \
 	    --port=8080 \
@@ -54,8 +54,8 @@ deploy: push
 	    --update-secrets=PROCESSOR_ADDRESS=PROCESSOR_ADDRESS:latest \
 	    --update-secrets=ENV=ENV:latest \
 	    --vpc-connector="projects/$(PROJECT_ID)/locations/$(DEPLOY_REGION)/connectors/orca-network-connector" \
-	    --vpc-egress=private-ranges-only \
+	    --vpc-egress=all-traffic \
 	    --ingress=internal \
 	    --tag=production \
-	    --port=443 \
+	    --port=8080 \
 	    --allow-unauthenticated

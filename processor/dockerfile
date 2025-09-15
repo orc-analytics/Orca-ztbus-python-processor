@@ -20,11 +20,10 @@ COPY processor/* .
 FROM python:3.13-slim-bookworm AS runtime
 
 WORKDIR /app
-ENV PORT=8080 PYTHONUNBUFFERED=1
 
 # copy installed deps and app from builder
 COPY --from=builder /usr/local /usr/local
 COPY --from=builder /app /app
 
-EXPOSE 443
+EXPOSE 8080
 CMD ["python", "main.py"]

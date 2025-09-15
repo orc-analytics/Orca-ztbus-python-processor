@@ -195,6 +195,22 @@ files = [
 protobuf = ["grpcio-tools (>=1.74.0)"]
 
 [[package]]
+name = "grpcio-reflection"
+version = "1.74.0"
+description = "Standard Protobuf Reflection Service for gRPC"
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "grpcio_reflection-1.74.0-py3-none-any.whl", hash = "sha256:ad1c4e94185f6def18f298f40f719603118f59d646939bb827f7bc72400f9ba0"},
+    {file = "grpcio_reflection-1.74.0.tar.gz", hash = "sha256:c7327d2520dcdac209872ebf57774c3239646dad882e4abb4ad7bebccaca2c83"},
+]
+
+[package.dependencies]
+grpcio = ">=1.74.0"
+protobuf = ">=6.31.1,<7.0.0"
+
+[[package]]
 name = "grpcio-tools"
 version = "1.74.0"
 description = "Protobuf code generator for gRPC"
@@ -293,7 +309,7 @@ version = "1.18.1"
 description = "Optional static typing for Python"
 optional = false
 python-versions = ">=3.9"
-groups = ["dev"]
+groups = ["main", "dev"]
 files = [
     {file = "mypy-1.18.1-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:2761b6ae22a2b7d8e8607fb9b81ae90bc2e95ec033fd18fa35e807af6c657763"},
     {file = "mypy-1.18.1-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:5b10e3ea7f2eec23b4929a3fabf84505da21034a4f4b9613cda81217e92b74f3"},
@@ -353,7 +369,7 @@ version = "1.1.0"
 description = "Type system extensions for programs checked with the mypy type checker."
 optional = false
 python-versions = ">=3.8"
-groups = ["dev"]
+groups = ["main", "dev"]
 files = [
     {file = "mypy_extensions-1.1.0-py3-none-any.whl", hash = "sha256:1be4cccdb0f2482337c4743e60421de3a356cd97508abadd57d47403e94f5505"},
     {file = "mypy_extensions-1.1.0.tar.gz", hash = "sha256:52e68efc3284861e772bbcd66823fde5ae21fd2fdb51c62a211403730b916558"},
@@ -445,19 +461,21 @@ files = [
 
 [[package]]
 name = "orca-python"
-version = "0.7.11"
+version = "0.7.14"
 description = "Python SDK for the Predixus Orca product"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "orca_python-0.7.11-py3-none-any.whl", hash = "sha256:a6c7caa93d9c6afa2a3a887be27eab94767bba3aff3d17424b63824b7a1dea6f"},
-    {file = "orca_python-0.7.11.tar.gz", hash = "sha256:0945e712e1aa66e6df6f0c5b9a273c3e761da65ae6fbf66c82b11746354f035c"},
+    {file = "orca_python-0.7.14-py3-none-any.whl", hash = "sha256:c2ddc461c5c92842648a747d5e005ab4d627b65e8d8e7545e0fc73eb860a2ce0"},
+    {file = "orca_python-0.7.14.tar.gz", hash = "sha256:9f561eed3bdb370f49a38941e44016f7639046a6ff5930184f9dde1cd9cf33c6"},
 ]
 
 [package.dependencies]
 grpcio = ">=1.71.0,<2.0.0"
+grpcio-reflection = ">=1.74.0,<2.0.0"
 grpcio-tools = ">=1.71.0,<2.0.0"
+mypy = ">=1.18.1,<2.0.0"
 
 [[package]]
 name = "pandas"
@@ -576,7 +594,7 @@ version = "0.12.1"
 description = "Utility library for gitignore style pattern matching of file paths."
 optional = false
 python-versions = ">=3.8"
-groups = ["dev"]
+groups = ["main", "dev"]
 files = [
     {file = "pathspec-0.12.1-py3-none-any.whl", hash = "sha256:a0d503e138a4c123b27490a4f7beda6a01c6f288df0e4a8b79c7eb0dc7b4cc08"},
     {file = "pathspec-0.12.1.tar.gz", hash = "sha256:a482d51503a1ab33b1c67a6c3813a26953dbdc71c31dacaef9a838c4e29f5712"},
@@ -700,14 +718,14 @@ files = [
 
 [[package]]
 name = "pydantic"
-version = "2.11.7"
+version = "2.11.9"
 description = "Data validation using Python type hints"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "pydantic-2.11.7-py3-none-any.whl", hash = "sha256:dde5df002701f6de26248661f6835bbe296a47bf73990135c7d07ce741b9623b"},
-    {file = "pydantic-2.11.7.tar.gz", hash = "sha256:d989c3c6cb79469287b1569f7447a17848c998458d49ebe294e975b9baf0f0db"},
+    {file = "pydantic-2.11.9-py3-none-any.whl", hash = "sha256:c42dd626f5cfc1c6950ce6205ea58c93efa406da65f479dcb4029d5934857da2"},
+    {file = "pydantic-2.11.9.tar.gz", hash = "sha256:6b8ffda597a14812a7975c90b82a8a2e777d9257aba3453f973acd3c032a18e2"},
 ]
 
 [package.dependencies]
@@ -1053,14 +1071,14 @@ telegram = ["requests"]
 
 [[package]]
 name = "types-psycopg2"
-version = "2.9.21.20250809"
+version = "2.9.21.20250915"
 description = "Typing stubs for psycopg2"
 optional = false
 python-versions = ">=3.9"
 groups = ["dev"]
 files = [
-    {file = "types_psycopg2-2.9.21.20250809-py3-none-any.whl", hash = "sha256:59b7b0ed56dcae9efae62b8373497274fc1a0484bdc5135cdacbe5a8f44e1d7b"},
-    {file = "types_psycopg2-2.9.21.20250809.tar.gz", hash = "sha256:b7c2cbdcf7c0bd16240f59ba694347329b0463e43398de69784ea4dee45f3c6d"},
+    {file = "types_psycopg2-2.9.21.20250915-py3-none-any.whl", hash = "sha256:eefe5ccdc693fc086146e84c9ba437bb278efe1ef330b299a0cb71169dc6c55f"},
+    {file = "types_psycopg2-2.9.21.20250915.tar.gz", hash = "sha256:bfeb8f54c32490e7b5edc46215ab4163693192bc90407b4a023822de9239f5c8"},
 ]
 
 [[package]]
@@ -1136,4 +1154,4 @@ standard = ["colorama (>=0.4) ; sys_platform == \"win32\"", "httptools (>=0.6.3)
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.13"
-content-hash = "dccc3751dcc0e85d9151a32bd9edc05b97aca978f91bb36e36d886003773cf0f"
+content-hash = "b223518b151f1555563a925b48cac4fea02c146b3a32cee051b84e32e7ccf5f3"
