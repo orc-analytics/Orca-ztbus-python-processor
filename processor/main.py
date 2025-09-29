@@ -176,7 +176,7 @@ def ReadActiveBusses(
         WHERE t."time" BETWEEN %(time_from)s AND %(time_to)s
     """
     with conn.cursor(
-        name="telem_cursor", cursor_factory=psycopg2.extras.RealDuctCursor
+        name="telem_cursor", cursor_factory=psycopg2.extras.RealDictCursor
     ) as cur:
         cur.execute(query, params)
         return [ReadActiveBussesRow(**row) for row in cur]  # type: ignore
@@ -544,7 +544,7 @@ def service_efficiency_per_minute(params: ExecutionParams) -> StructResult:
 
 
 # --- Comfort & Safety ---
-@proc.algorithm("ComfortAndSafetyPerMinute", "1.0.0", EveryMinute)
+@proc.algorithm("ComfortAndSafetyPerMinute", "1.0.0", EveryMinutePerTripPerBus)
 def comfort_and_safety_per_minute(params: ExecutionParams) -> StructResult:
     with db_pool.connection() as conn:
         telem = ReadTelemetryForTripAndTime(
