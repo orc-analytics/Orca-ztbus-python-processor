@@ -30,7 +30,7 @@ deploy: push
 	    --update-secrets=ZTBUS_PASS=ZTBUS_PASS:latest \
 	    --update-secrets=ZTBUS_PORT=ZTBUS_PORT:latest \
 	    --update-secrets=ORCA_CORE=ORCA_CORE:latest \
-	    --update-secrets=PROCESSOR_PORT=PROCESSOR_PORT:latest \
+	    --update-secrets=PROCESSOR_EXTERNAL_PORT=PROCESSOR_EXTERNAL_PORT:latest \
 	    --update-secrets=PROCESSOR_ADDRESS=PROCESSOR_ADDRESS:latest \
 	    --update-secrets=ENV=ENV:latest \
 	    --vpc-connector="projects/$(PROJECT_ID)/locations/$(DEPLOY_REGION)/connectors/orca-network-connector" \
@@ -50,7 +50,7 @@ deploy: push
 	    --update-secrets=ZTBUS_PASS=ZTBUS_PASS:latest \
 	    --update-secrets=ZTBUS_PORT=ZTBUS_PORT:latest \
 	    --update-secrets=ORCA_CORE=ORCA_CORE:latest \
-	    --update-secrets=PROCESSOR_PORT=PROCESSOR_PORT:latest \
+	    --update-secrets=PROCESSOR_EXTERNAL_PORT=PROCESSOR_EXTERNAL_PORT:latest \
 	    --update-secrets=PROCESSOR_ADDRESS=PROCESSOR_ADDRESS:latest \
 	    --update-secrets=ENV=ENV:latest \
 	    --vpc-connector="projects/$(PROJECT_ID)/locations/$(DEPLOY_REGION)/connectors/orca-network-connector" \
