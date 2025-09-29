@@ -12,7 +12,10 @@ import pandas as pd
 from db import db_pool
 from psycopg2.extensions import connection as PGConnection
 
-from windows import EveryMinute, HaltBrakeApplied, ParkBrakeApplied
+from windows import (
+    EveryMinute,
+    EveryMinutePerTripPerBus,
+)
 
 from typing import TypedDict, Optional, Callable, ParamSpec, TypeVar, List
 import psycopg2.extras
@@ -150,6 +153,33 @@ def ReadTelemetryForTripAndTime(
     ) as cur:
         cur.execute(query, params)
         return [ReadTelemResultRow(**row) for row in cur]  # type: ignore
+
+
+class ReadActiveBussesParams(TypedDict):
+    time_from: dt.datetime
+    time_to: dt.datetime
+
+
+class ReadActiveBussesRow(TypedDict):
+    trip_id: int
+    bus_id: int
+    route_id: int
+
+
+def ReadActiveBusses(
+    params: ReadActiveBussesParams, conn: PGConnection
+) -> List[ReadActiveBussesRow]:
+    query = """
+        SELECT DISTINCT t.trip_id, tr.bus_id, tr.route_id 
+        FROM telemetry t 
+        JOIN trips tr ON t.trip_id = tr.id 
+        WHERE t."time" BETWEEN %(time_from)s AND %(time_to)s
+    """
+    with conn.cursor(
+        name="telem_cursor", cursor_factory=psycopg2.extras.RealDuctCursor
+    ) as cur:
+        cur.execute(query, params)
+        return [ReadActiveBussesRow(**row) for row in cur]  # type: ignore
 
 
 class ReadTripsFromTripIdParams(TypedDict):
@@ -308,83 +338,116 @@ def _find_contiguous_chunks_and_emit(
     return windows_emitted
 
 
-@proc.algorithm("FindHaltBrakeWindows", "1.0.0", EveryMinute)
-def find_when_applying_halt_brake(params: ExecutionParams) -> ValueResult:
+# --- Find whether a trip is ongoing ---
+@proc.algorithm("FindActiveBusses", "1.0.0", EveryMinute)
+def FindActiveBuses(params: ExecutionParams) -> ValueResult:
     with db_pool.connection() as conn:
         # get telemetry for this window
-        telem = ReadTelemetryForTripAndTime(
-            ReadTelemParams(
+        buses = ReadActiveBusses(
+            ReadActiveBussesParams(
                 time_from=params.window.time_from,
                 time_to=params.window.time_to,
-                trip_id=None,
             ),
             conn,
         )
-        df = pd.DataFrame(telem)
-        if df.empty:
-            return ValueResult(0)
-
-        windowsEmitted = 0
-        for trip_id, trip_df in df.groupby("trip_id"):
-            # Ensure trip_id is an integer
-            trip_id_int = int(trip_id)
-
-            trip_df.sort_values("time", ascending=True, inplace=True)
-            trip_df.reset_index(inplace=True, drop=True)
-
-            windowsEmitted += _find_contiguous_chunks_and_emit(
-                df=trip_df,
-                tgt_column="status_halt_brake_is_active",
-                time_column="time",
-                trip_id=trip_id_int,
-                params=params,
-                emitting_window=HaltBrakeApplied,
-                origin="halt_brake_emitter",
-                conn=conn,
+        count = 0
+        for bus in buses:
+            count += 1
+            EmitWindow(
+                Window(
+                    time_from=params.time_from,
+                    time_to=params.time_to,
+                    name=EveryMinutePerTripPerBus.name,
+                    version=EveryMinutePerTripPerBus.version,
+                    origin="active_bus_emitter",
+                    metadata={
+                        "trip_id": bus.get("trip_id"),
+                        "bus_id": bus.get("bus_id"),
+                        "route_id": bus.get("route_id"),
+                    },
+                )
             )
 
-    return ValueResult(windowsEmitted)
+    return ValueResult(count)
 
 
-@proc.algorithm("FindParkBrakeWindows", "1.0.0", EveryMinute)
-def find_when_applying_park_brake(params: ExecutionParams) -> ValueResult:
-    with db_pool.connection() as conn:
-        # get telemetry for this window
-        telem = ReadTelemetryForTripAndTime(
-            ReadTelemParams(
-                time_from=params.window.time_from,
-                time_to=params.window.time_to,
-                trip_id=None,
-            ),
-            conn,
-        )
-        df = pd.DataFrame(telem)
-        if df.empty:
-            return ValueResult(0)
-        windowsEmitted = 0
-        for trip_id, trip_df in df.groupby("trip_id"):
-            # Ensure trip_id is an integer
-            trip_id_int = int(trip_id)
-
-            trip_df.sort_values("time", ascending=True, inplace=True)
-            trip_df.reset_index(inplace=True, drop=True)
-
-            windowsEmitted += _find_contiguous_chunks_and_emit(
-                df=trip_df,
-                tgt_column="status_park_brake_is_active",
-                time_column="time",
-                trip_id=trip_id_int,
-                params=params,
-                emitting_window=ParkBrakeApplied,
-                origin="park_brake_emitter",
-                conn=conn,
-            )
-    return ValueResult(windowsEmitted)
+# @proc.algorithm("FindHaltBrakeWindows", "1.0.0", EveryMinute)
+# def find_when_applying_halt_brake(params: ExecutionParams) -> ValueResult:
+#     with db_pool.connection() as conn:
+#         # get telemetry for this window
+#         telem = ReadTelemetryForTripAndTime(
+#             ReadTelemParams(
+#                 time_from=params.window.time_from,
+#                 time_to=params.window.time_to,
+#                 trip_id=None,
+#             ),
+#             conn,
+#         )
+#         df = pd.DataFrame(telem)
+#         if df.empty:
+#             return ValueResult(0)
+#
+#         windowsEmitted = 0
+#         for trip_id, trip_df in df.groupby("trip_id"):
+#             # Ensure trip_id is an integer
+#             trip_id_int = int(trip_id)
+#
+#             trip_df.sort_values("time", ascending=True, inplace=True)
+#             trip_df.reset_index(inplace=True, drop=True)
+#
+#             windowsEmitted += _find_contiguous_chunks_and_emit(
+#                 df=trip_df,
+#                 tgt_column="status_halt_brake_is_active",
+#                 time_column="time",
+#                 trip_id=trip_id_int,
+#                 params=params,
+#                 emitting_window=HaltBrakeApplied,
+#                 origin="halt_brake_emitter",
+#                 conn=conn,
+#             )
+#
+#     return ValueResult(windowsEmitted)
+#
+#
+# @proc.algorithm("FindParkBrakeWindows", "1.0.0", EveryMinute)
+# def find_when_applying_park_brake(params: ExecutionParams) -> ValueResult:
+#     with db_pool.connection() as conn:
+#         # get telemetry for this window
+#         telem = ReadTelemetryForTripAndTime(
+#             ReadTelemParams(
+#                 time_from=params.window.time_from,
+#                 time_to=params.window.time_to,
+#                 trip_id=None,
+#             ),
+#             conn,
+#         )
+#         df = pd.DataFrame(telem)
+#         if df.empty:
+#             return ValueResult(0)
+#         windowsEmitted = 0
+#         for trip_id, trip_df in df.groupby("trip_id"):
+#             # Ensure trip_id is an integer
+#             trip_id_int = int(trip_id)
+#
+#             trip_df.sort_values("time", ascending=True, inplace=True)
+#             trip_df.reset_index(inplace=True, drop=True)
+#
+#             windowsEmitted += _find_contiguous_chunks_and_emit(
+#                 df=trip_df,
+#                 tgt_column="status_park_brake_is_active",
+#                 time_column="time",
+#                 trip_id=trip_id_int,
+#                 params=params,
+#                 emitting_window=ParkBrakeApplied,
+#                 origin="park_brake_emitter",
+#                 conn=conn,
+#             )
+#     return ValueResult(windowsEmitted)
 
 
 # --- Temperature ---
-@proc.algorithm("HaltBrakeAmbientTemperature", "1.0.0", HaltBrakeApplied)
-def halt_brake_ambient_temperature(params: ExecutionParams) -> StructResult:
+@proc.algorithm("AmbientTemperature", "1.0.0", EveryMinutePerTripPerBus)
+def ambient_temperature_per_minute(params: ExecutionParams) -> StructResult:
     with db_pool.connection() as conn:
         trip_id = params.window.metadata["trip_id"]
         if trip_id is None:
@@ -407,32 +470,8 @@ def halt_brake_ambient_temperature(params: ExecutionParams) -> StructResult:
     )
 
 
-@proc.algorithm("ParkBrakeAmbientTemperature", "1.0.0", ParkBrakeApplied)
-def park_brake_ambient_temperature(params: ExecutionParams) -> StructResult:
-    trip_id = params.window.metadata["trip_id"]
-    with db_pool.connection() as conn:
-        if trip_id is None:
-            raise Exception("Require trip_id as metadata to the window")
-
-        telem = ReadTelemetryForTripAndTime(
-            ReadTelemParams(
-                time_from=params.window.time_from,
-                time_to=params.window.time_to,
-                trip_id=trip_id,
-            ),
-            conn,
-        )
-    df = pd.DataFrame(telem)
-    median = df["temperature_ambient"].median()
-    return StructResult(
-        {
-            "50p": median,
-        }
-    )
-
-
 # --- Energy Efficiency ---
-@proc.algorithm("EnergyEfficiencyPerMinute", "1.0.0", EveryMinute)
+@proc.algorithm("EnergyEfficiencyPerMinute", "1.0.0", EveryMinutePerTripPerBus)
 def energy_efficiency_per_minute(params: ExecutionParams) -> StructResult:
     with db_pool.connection() as conn:
         telem = ReadTelemetryForTripAndTime(
@@ -476,7 +515,7 @@ def energy_efficiency_per_minute(params: ExecutionParams) -> StructResult:
 
 
 # --- Service Efficiency ---
-@proc.algorithm("ServiceEfficiencyPerMinute", "1.0.0", EveryMinute)
+@proc.algorithm("ServiceEfficiencyPerMinute", "1.0.0", EveryMinutePerTripPerBus)
 def service_efficiency_per_minute(params: ExecutionParams) -> StructResult:
     with db_pool.connection() as conn:
         telem = ReadTelemetryForTripAndTime(
@@ -535,7 +574,7 @@ def comfort_and_safety_per_minute(params: ExecutionParams) -> StructResult:
 
 
 # --- Asset Stress ---
-@proc.algorithm("AssetStressPerMinute", "1.0.0", EveryMinute)
+@proc.algorithm("AssetStressPerMinute", "1.0.0", EveryMinutePerTripPerBus)
 def asset_stress_per_minute(params: ExecutionParams) -> StructResult:
     with db_pool.connection() as conn:
         telem = ReadTelemetryForTripAndTime(
